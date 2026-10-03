@@ -40,7 +40,28 @@
   #line .num { font-family: 'Cairo', sans-serif; font-weight: 800; direction: ltr; unicode-bidi: isolate; }
   #hint { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.6); color: #93c5fd; min-height: 0; }
   #hint:empty { display: none; }
-  #heard { font-size: calc(var(--u)*1.6); color: rgba(255,255,255,.55); margin-top: calc(var(--u)*.3); min-height: calc(var(--u)*2.2); }
+  #heard { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2); color: rgba(255,255,255,.6); margin-top: calc(var(--u)*.3); min-height: calc(var(--u)*2.6); }
+  #status { display: inline-flex; align-items: center; gap: calc(var(--u)*.8); margin-top: calc(var(--u)*.6); padding: calc(var(--u)*.35) calc(var(--u)*1.6); border-radius: calc(var(--u)*2); font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*2.2); background: rgba(255,255,255,.1); color: #e5e7eb; transition: background .2s, color .2s; }
+  #status.listen { background: rgba(31,157,85,.25); color: #86efac; }
+  #status.listen::before { content: ''; width: calc(var(--u)*1.1); height: calc(var(--u)*1.1); border-radius: 50%; background: #22c55e; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  #status.part { background: rgba(34,197,94,.3); color: #bbf7d0; }
+  #status.bad { background: rgba(239,68,68,.35); color: #fecaca; }
+  #status.ok { background: #22c55e; color: #052e16; font-size: calc(var(--u)*2.8); }
+  #status.off { background: rgba(239,68,68,.25); color: #fca5a5; }
+  #status .miss { color: #fde68a; }
+  #timer { display: none; margin-inline-start: calc(var(--u)*1); background: #111827; color: #fff; padding: 0 calc(var(--u)*.8); border-radius: calc(var(--u)*.4); direction: ltr; font-variant-numeric: tabular-nums; }
+  #timer.on { display: inline-block; } #timer.low { background: #dc2626; animation: blink 1s infinite; }
+  .modes { display: flex; gap: calc(var(--u)*2); flex-wrap: wrap; justify-content: center; }
+  .btn.alt { background: #38bdf8; box-shadow: 0 6px 0 #0369a1; }
+  .btn.alt:active { box-shadow: 0 2px 0 #0369a1; }
+  .names { display: flex; gap: calc(var(--u)*1); flex-wrap: wrap; justify-content: center; max-width: 80%; }
+  .names button { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.6); font-weight: 700; padding: calc(var(--u)*.4) calc(var(--u)*2); border-radius: calc(var(--u)*1); border: calc(var(--u)*.25) solid #ffd166; background: rgba(0,0,0,.35); color: #fff; cursor: pointer; }
+  .names button.sel { background: #ffd166; color: #111; }
+  #result { display: grid; grid-template-columns: auto auto; gap: calc(var(--u)*.6) calc(var(--u)*3); font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.8); text-align: right; }
+  #result b { font-family: 'Cairo', sans-serif; font-size: calc(var(--u)*3.2); color: #ffd166; direction: ltr; }
+  #result .total { grid-column: 1 / -1; text-align: center; font-size: calc(var(--u)*4); margin-top: calc(var(--u)*.6); }
+  #result .total b { font-size: calc(var(--u)*6); }
   #bubble { position: absolute; top: calc(var(--u)*-3.6); left: 50%; transform: translateX(-50%) scale(0); background: #ffd166; color: #111; font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*2.4); padding: calc(var(--u)*.2) calc(var(--u)*1.6); border-radius: calc(var(--u)*2); white-space: nowrap; transition: transform .2s; }
   #bubble.show { transform: translateX(-50%) scale(1); }
   #bubble.bad { background: #ef4444; color: #fff; }
@@ -68,7 +89,7 @@
     <div id="brand">وابِل</div>
     <div id="score">
       <span class="t red">الأَحْمَرُ</span><b id="sr">0</b><span>-</span><b id="sb">0</b><span class="t blue">الأَزْرَقُ</span>
-      <span id="clock">0'</span>
+      <span id="clock">0'</span><span id="timer">3:00</span>
     </div>
     <div id="stars">⭐ 0</div>
     <div id="mic">🎤</div>
@@ -79,12 +100,32 @@
     <div id="line"></div>
     <div id="hint"></div>
     <div id="heard"></div>
+    <div id="status"></div>
   </div>
   <div id="start" class="screen">
     <div class="brand">وابِل</div>
     <h1>⚽ المُعَلِّقُ الصَّغيرُ ⚽</h1>
     <p>عَلِّقْ عَلى المُباراةِ بِالعَرَبِيَّةِ… وَالمُباراةُ تَقِفُ حَتّى تَقولَها صَحيحَةً!</p>
-    <button class="btn" id="go">ابْدَأِ المُباراةَ</button>
+    <div class="modes">
+      <button class="btn" id="go">مُباراةُ الصَّفِّ</button>
+      <button class="btn alt" id="goChal">تَحَدّي ٣ دَقائِقَ ⏱️</button>
+    </div>
+  </div>
+  <div id="pickName" class="screen hidden">
+    <div class="brand">وابِل</div>
+    <h1>مَنِ المُعَلِّقُ؟</h1>
+    <p>اضْغَطْ عَلى اسْمِكَ ثُمَّ ابْدَأْ. عِنْدَكَ ٣ دَقائِقَ: كُلُّ جُمْلَةٍ صَحيحَةٍ تُقَرِّبُكَ مِنَ الهَدَفِ!</p>
+    <div class="names" id="nameBtns"></div>
+    <button class="btn alt" id="goChal2">ابْدَأِ التَّحَدّي</button>
+  </div>
+  <div id="chalEnd" class="screen hidden">
+    <div class="brand">وابِل</div>
+    <h1 id="chalTitle">انْتَهى الوَقْتُ!</h1>
+    <div id="result"></div>
+    <div class="modes">
+      <button class="btn alt" id="chalAgain">تَحَدٍّ جَديدٌ</button>
+      <button class="btn" id="chalHome">القائِمَةُ</button>
+    </div>
   </div>
   <div id="end" class="screen hidden">
     <div class="brand">وابِل</div>
@@ -113,6 +154,7 @@ const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const LANG = params.get('lang') || 'ar-SA';
 const CHAINS_PER_HALF = Math.max(1, Math.min(6, +params.get('chains') || 3));
+const CHAL_SECS = Math.max(30, +params.get('secs') || 180);
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -254,7 +296,15 @@ const P = {
 };
 
 // ---------------- prompt card ----------------
-let cur = null, stars = 0;
+let cur = null, stars = 0, stat = { lines: 0, first: 0, wrong: 0, goals: 0 };
+function setStatus(cls, html) { const e = $('status'); e.className = cls; e.innerHTML = html; }
+function missingWords() { return cur.spec.segs.filter(x => x.g !== undefined && !cur.sat.has(x.g) && typeof x.t !== 'number').map(x => x.t.trim()).filter((v, i, a) => v && a.indexOf(v) === i); }
+function listenStatus() {
+  if (!cur || cur.done) return;
+  if (!micOK) return setStatus('off', '🚫 المايك مُغْلَقٌ — المُعَلِّمُ يَحْكُمُ');
+  const m = missingWords();
+  setStatus('listen', cur.sat.size ? 'أَكْمِلْ: <span class="miss">' + m.join(' … ') + '</span>' : 'أَنا أَسْمَعُكَ… قُلِ الجُمْلَةَ');
+}
 const PRAISE = ['أَحْسَنْتَ!', 'مُمْتازٌ!', 'رائِعٌ!', 'بارَكَ اللهُ فيكَ!', 'صَحيحٌ!'];
 function renderLine() {
   const el = $('line'); el.innerHTML = '';
@@ -279,9 +329,10 @@ function showHint() {
 function ask(spec) {
   return new Promise(res => {
     cur = { spec, sat: new Set(), wrong: 0, got: false, res, done: false };
+    if (timeUp) { cur = null; return res(); }
     renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
     $('card').className = cardPos();
-    setCrowd(.015); listen(!paused);
+    setCrowd(.015); listen(!paused); listenStatus();
   });
 }
 function cardPos() { return focusP && focusP.y > 540 ? 'top' : ''; }
@@ -290,15 +341,19 @@ function success() {
   cur.done = true; listen(false);
   cur.spec.groups.forEach((_, i) => cur.sat.add(i)); renderLine();
   S.ding(); S.cheer(1.2, .25); stars++; $('stars').textContent = '⭐ ' + stars;
+  stat.lines++; if (cur.wrong === 0) stat.first++;
   bubble(pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
+  setStatus('ok', '✔ صَحيحٌ!' + (cur.wrong === 0 ? ' مِنْ أَوَّلِ مَرَّةٍ ⭐' : ''));
   const r = cur.res;
-  setTimeout(() => { $('card').className = 'hidden ' + cardPos(); cur = null; setCrowd(.1); r(); }, 1200);
+  setTimeout(() => { $('card').className = 'hidden ' + cardPos(); cur = null; setCrowd(.1); r(); }, 1300);
 }
 function miss(kind) {
   if (!cur || cur.done) return;
-  cur.wrong++; S.buzz();
+  cur.wrong++; stat.wrong++; S.buzz();
   const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
   bubble(kind === 'en' ? 'بِالعَرَبِيَّةِ مِنْ فَضْلِكَ!' : 'حاوِلْ مَرَّةً أُخْرى!', 'bad');
+  setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَفْهَمْ.') + ' قُلْ: <span class="miss">' + missingWords().join(' … ') + '</span>');
+  clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2200);
   if (cur.wrong >= 1) showHint();
   if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
 }
@@ -307,15 +362,16 @@ function onSpeech(alts, final) {
   const text = alts[0] || '';
   const latin = /[a-z]{2,}/i.test(text);
   $('heard').textContent = latin ? '' : (text ? 'سَمِعْتُ: «' + text.trim() + '»' : '');
+  let newHit = false;
   cur.spec.groups.forEach((g, i) => {
     if (cur.sat.has(i)) return;
-    if (alts.some(a => groupMatch(a, g))) { cur.sat.add(i); cur.got = true; }
+    if (alts.some(a => groupMatch(a, g))) { cur.sat.add(i); cur.got = true; newHit = true; }
   });
   renderLine();
   if (cur.sat.size === cur.spec.groups.length) return success();
+  if (newHit) { S.tick(); clearTimeout(cur.stT); setStatus('part', '✔ أَكْمِلْ: <span class="miss">' + missingWords().join(' … ') + '</span>'); }
   if (final) {
-    if (cur.got) { S.tick(); bubble('أَكْمِلْ!', ''); }
-    else miss(latin ? 'en' : 'wrong');
+    if (!cur.got) miss(latin ? 'en' : 'wrong');
     cur.got = false;
   }
 }
@@ -380,7 +436,7 @@ function giveBall(p) { holder = p; ball.free = false; ball.z = 0; }
 function fwdX(p, x) { return p.team === 'red' ? Math.min(x, 1250) : Math.max(x, 350); }
 
 function update(dt) {
-  T += dt;
+  T += dt; tickTimer(dt);
   for (let i = anims.length - 1; i >= 0; i--) {
     const a = anims[i]; a.t += dt; const k = Math.min(1, a.t / a.dur); a.fn(a.e(k));
     if (k >= 1) { anims.splice(i, 1); a.res(); }
@@ -716,9 +772,48 @@ function buildPlan() {
   return plan;
 }
 
-let running = false;
+let running = false, challenge = false, timeUp = false, chalLeft = 0, chalName = '';
+function cancelAsk() { if (!cur || cur.done) return; cur.done = true; listen(false); const r = cur.res; $('card').className = 'hidden'; cur = null; r(); }
+function fmtT(t) { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
+function tickTimer(dt) {
+  if (!challenge || !running || timeUp) return;
+  chalLeft -= dt; const el = $('timer'); el.textContent = fmtT(chalLeft); el.className = 'on' + (chalLeft < 30 ? ' low' : '');
+  if (chalLeft <= 0) { timeUp = true; S.whistle(3); cancelAsk(); }
+}
+function chalChain() {
+  const moves = [];
+  if (Math.random() < .3) moves.push({ k: 'attack' });
+  const n = Math.random() < .5 ? 1 : 2; let prev = null;
+  for (let j = 0; j < n; j++) { let k; do { k = pick(['dribble', 'run', 'pass']); } while (k === prev); prev = k; moves.push({ k, to: k === 'pass' && Math.random() < .5 }); }
+  const r2 = Math.random();
+  if (r2 < .2) moves.splice(1 + Math.floor(Math.random() * moves.length), 0, { k: 'foul' });
+  else if (r2 < .4) moves.push({ k: 'steal', kind: Math.random() < .5 ? 'intercept' : 'steal' }, { k: 'dribble' });
+  if (Math.random() < .3) moves.splice(Math.max(0, moves.length - 1), 0, { k: 'wave' });
+  const o = Math.random() < .7 ? 'goal' : 'save';
+  moves.push({ k: 'shot', outcome: o, hard: Math.random() < .5 }, { k: o });
+  return moves;
+}
+async function runChallenge() {
+  running = true; challenge = true; timeUp = false; chalLeft = CHAL_SECS; stat = { lines: 0, first: 0, wrong: 0, goals: 0 };
+  newWorld(); setCrowd(.1); $('clock').style.display = 'none'; $('timer').className = 'on'; $('timer').textContent = fmtT(chalLeft);
+  await EV.kickoff({ team: 'red' });
+  while (!timeUp) {
+    for (const e of chalChain()) {
+      if (timeUp) break;
+      const g = score.red + score.blue;
+      await EV[e.k](e);
+      if (score.red + score.blue > g) stat.goals++;
+      await wait(.3);
+    }
+  }
+  setCrowd(0); running = false; challenge = false; stopRec(); $('timer').className = ''; $('clock').style.display = '';
+  const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5;
+  $('chalTitle').textContent = 'انْتَهى الوَقْتُ' + (chalName ? ' يا ' + chalName : '') + '!';
+  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
+  $('chalEnd').className = 'screen';
+}
 async function runMatch() {
-  running = true; newWorld();
+  running = true; challenge = false; timeUp = false; newWorld(); stat = { lines: 0, first: 0, wrong: 0, goals: 0 };
   const plan = buildPlan();
   const hIdx = plan.findIndex(e => e.k === 'halftime'), E = plan.length;
   setCrowd(.1);
@@ -736,15 +831,26 @@ async function runMatch() {
 }
 
 // ---------------- controls ----------------
-async function begin() {
+async function prep() {
   initAudio(); if (AC.state === 'suspended') AC.resume();
   try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); } catch (e) { if (SR) micOK = false; }
   initRec(); startRec();
-  $('start').className = 'screen hidden'; $('end').className = 'screen hidden';
-  runMatch();
+  ['start', 'end', 'pickName', 'chalEnd'].forEach(id => $(id).className = 'screen hidden');
+}
+async function begin() { await prep(); runMatch(); }
+async function beginChal() { await prep(); runChallenge(); }
+function showNames() {
+  ['start', 'end', 'chalEnd'].forEach(id => $(id).className = 'screen hidden');
+  const box = $('nameBtns'); box.innerHTML = '';
+  NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.className = n === chalName ? 'sel' : ''; b.onclick = () => { chalName = n; [...box.children].forEach(c => c.className = c === b ? 'sel' : ''); }; box.appendChild(b); });
+  $('pickName').className = 'screen';
 }
 $('go').onclick = begin;
 $('again').onclick = begin;
+$('goChal').onclick = showNames;
+$('goChal2').onclick = beginChal;
+$('chalAgain').onclick = showNames;
+$('chalHome').onclick = () => { $('chalEnd').className = 'screen hidden'; $('start').className = 'screen'; };
 function togglePause() {
   if (!running) return;
   paused = !paused; $('pauseOv').className = paused ? '' : 'hidden';
