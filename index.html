@@ -50,6 +50,15 @@
   #status.part { background: rgba(34,197,94,.3); color: #bbf7d0; }
   #status.bad { background: rgba(239,68,68,.35); color: #fecaca; }
   #status.ok { background: #22c55e; color: #052e16; font-size: calc(var(--u)*2.8); }
+  #status.darj { background: #ffd166; color: #3b2a00; font-size: calc(var(--u)*2.8); }
+  #status.prep { background: rgba(56,189,248,.3); color: #bae6fd; }
+  #status.reset { background: rgba(249,115,22,.35); color: #fed7aa; }
+  #flow { height: calc(var(--u)*1); margin: calc(var(--u)*.6) auto 0; width: 70%; background: rgba(255,255,255,.12); border-radius: calc(var(--u)*.5); overflow: hidden; display: none; }
+  #flow.on { display: block; }
+  #flow i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #22c55e, #ffd166); transform-origin: right; }
+  .lvl { display: flex; gap: calc(var(--u)*1); margin-top: calc(var(--u)*.4); }
+  .lvl button { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.2); font-weight: 700; padding: calc(var(--u)*.3) calc(var(--u)*1.6); border-radius: calc(var(--u)*1); border: calc(var(--u)*.2) solid #ffd166; background: rgba(0,0,0,.35); color: #fff; cursor: pointer; }
+  .lvl button.sel { background: #ffd166; color: #111; }
   #status.off { background: rgba(239,68,68,.25); color: #fca5a5; }
   #status .miss { color: #fde68a; }
   #timer { display: none; margin-inline-start: calc(var(--u)*1); background: #111827; color: #fff; padding: 0 calc(var(--u)*.8); border-radius: calc(var(--u)*.4); direction: ltr; font-variant-numeric: tabular-nums; }
@@ -105,11 +114,13 @@
     <div id="hint"></div>
     <div id="heard"></div>
     <div id="status"></div>
+    <div id="flow"><i></i></div>
   </div>
   <div id="start" class="screen">
     <div class="brand">وابِل</div>
     <h1>⚽ المُعَلِّقُ الصَّغيرُ ⚽</h1>
     <p>عَلِّقْ عَلى المُباراةِ بِالعَرَبِيَّةِ… وَالمُباراةُ تَقِفُ حَتّى تَقولَها صَحيحَةً!</p>
+    <div class="lvl"><button id="lv1">مُسْتَوى ١: كَلِمَةً كَلِمَةً</button><button id="lv2" class="sel">مُسْتَوى ٢: دَرْج (قِراءَةٌ مُتَّصِلَةٌ)</button></div>
     <div class="modes">
       <button class="btn" id="go">مُباراةُ الصَّفِّ</button>
       <button class="btn alt" id="goChal">تَحَدّي ٣ دَقائِقَ ⏱️</button>
@@ -302,7 +313,16 @@ const P = {
 
 // ---------------- prompt card ----------------
 const PRAISE = ['أَحْسَنْتَ!', 'مُمْتازٌ!', 'رائِعٌ!', 'بارَكَ اللهُ فيكَ!', 'صَحيحٌ!'];
-let cur = null, stars = 0, stat = { lines: 0, first: 0, wrong: 0, goals: 0 };
+let cur = null, stars = 0, stat = { lines: 0, first: 0, wrong: 0, goals: 0, darj: 0 };
+let DARJ = true; // level 2: the sentence must be read in one flow
+const PREVIEW_MS = 2000;
+function flowBudget(n) { return 1.5 + 0.8 * n; } // seconds allowed from first word to last
+function flowTick() { // drains the flow bar
+  if (!cur || cur.done || !cur.t0) return;
+  const k = Math.max(0, 1 - (performance.now() - cur.t0) / 1000 / cur.budget);
+  $('flow').firstElementChild.style.transform = 'scaleX(' + k + ')';
+  if (k > 0) requestAnimationFrame(flowTick);
+}
 function setStatus(cls, html) { const e = $('status'); e.className = cls; e.innerHTML = html; }
 
 // ---- whole-sentence matching: every word must be read, in order ----
@@ -359,7 +379,7 @@ function nextWord() { return cur && cur.pos < cur.units.length ? cur.units[cur.p
 function listenStatus() {
   if (!cur || cur.done) return;
   if (!micOK) return setStatus('off', '🚫 المايك مُغْلَقٌ — المُعَلِّمُ يَحْكُمُ');
-  setStatus('listen', cur.pos ? 'أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>' : 'أَنا أَسْمَعُكَ… اقْرَأِ الجُمْلَةَ كامِلَةً');
+  setStatus('listen', cur.pos ? 'أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>' : (DARJ ? '🎤 اقْرَأْها دَرْجاً… بِلا تَوَقُّفٍ!' : 'أَنا أَسْمَعُكَ… اقْرَأِ الجُمْلَةَ كامِلَةً'));
 }
 function renderLine() {
   const el = $('line'); el.innerHTML = '';
@@ -384,10 +404,16 @@ function showHint() {
 function ask(spec) {
   return new Promise(res => {
     if (timeUp) { cur = null; return res(); }
-    cur = { spec, units: compile(spec), pos: 0, wrong: 0, res, done: false, finals: [], lastHit: 0, lastPos: 0 };
+    cur = { spec, units: compile(spec), pos: 0, wrong: 0, res, done: false, finals: [], lastHit: 0, lastPos: 0, t0: 0, resets: 0 };
+    cur.budget = flowBudget(cur.units.length);
     renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
-    $('card').className = cardPos();
-    setCrowd(.015); listen(!paused); listenStatus();
+    $('card').className = cardPos(); $('flow').className = DARJ ? 'on' : ''; $('flow').firstElementChild.style.transform = 'scaleX(1)';
+    setCrowd(.015);
+    if (DARJ) { // silent preview first, then go
+      setStatus('prep', '👀 اقْرَأْها في سِرِّكَ… اسْتَعِدَّ');
+      const me = cur;
+      setTimeout(() => { if (cur !== me || me.done) return; S.tick(); listen(!paused); listenStatus(); }, PREVIEW_MS);
+    } else { listen(!paused); listenStatus(); }
   });
 }
 function cardPos() { return focusP && focusP.y > 540 ? 'top' : ''; }
@@ -395,10 +421,13 @@ function success() {
   if (!cur || cur.done) return;
   cur.done = true; listen(false);
   cur.pos = cur.units.length; renderLine();
-  S.ding(); S.cheer(1.2, .25); stars++; $('stars').textContent = '⭐ ' + stars;
-  stat.lines++; if (cur.wrong === 0) stat.first++;
-  bubble(pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
-  setStatus('ok', '✔ صَحيحٌ!' + (cur.wrong === 0 ? ' مِنْ أَوَّلِ مَرَّةٍ ⭐' : ''));
+  const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
+  const fluent = secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5);
+  S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
+  stat.lines++; if (cur.wrong === 0) stat.first++; if (fluent) stat.darj++;
+  bubble(fluent ? 'دَرْجٌ مُمْتازٌ! ⭐⭐' : pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
+  $('flow').className = '';
+  setStatus(fluent ? 'darj' : 'ok', fluent ? '🌟 دَرْجٌ مُمْتازٌ! قِراءَةٌ مُتَّصِلَةٌ' : '✔ صَحيحٌ' + (DARJ ? '… حاوِلْ أَسْرَعَ بِلا تَوَقُّفٍ' : '!') + (cur.wrong === 0 && !DARJ ? ' مِنْ أَوَّلِ مَرَّةٍ ⭐' : ''));
   const r = cur.res;
   setTimeout(() => { $('card').className = 'hidden ' + cardPos(); cur = null; setCrowd(.1); r(); }, 1300);
 }
@@ -424,11 +453,30 @@ function onSpeech(alts, final) {
   let best = before;
   for (const a of [[...cur.finals, text].join(' '), ...alts]) best = Math.max(best, align(tokens(norm(a)), cur.units));
   cur.pos = best;
+  if (final && align(tokens(norm(text)), cur.units) >= cur.units.length) cur.fluentFinal = true;
   const newHit = cur.pos > before;
+  if (newHit && !cur.t0) { cur.t0 = performance.now(); if (DARJ) flowTick(); }
   dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
   renderLine();
   if (cur.pos >= cur.units.length) return success();
-  if (newHit) { cur.lastHit = performance.now(); S.tick(); clearTimeout(cur.stT); setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>'); }
+  if (newHit) {
+    cur.lastHit = performance.now(); S.tick(); clearTimeout(cur.stT);
+    setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>');
+  }
+  if (final && text && DARJ && cur.pos > 0) {
+    // level 2: a pause mid-sentence restarts it
+    const pieceFull = align(tokens(norm(text)), cur.units) >= cur.units.length;
+    if (!pieceFull) {
+      cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; renderLine();
+      $('flow').firstElementChild.style.transform = 'scaleX(1)';
+      S.buzz(); if (cur.resets >= 2) { cur.wrong++; stat.wrong++; }
+      const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
+      bubble('تَوَقَّفْتَ!', 'bad');
+      setStatus('reset', '⏸ تَوَقَّفْتَ! اقْرَأْها دَرْجاً مِنَ البِدايَةِ بِلا تَوَقُّفٍ');
+      clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2500);
+      return;
+    }
+  }
   if (final && text) {
     cur.finals.push(text); if (cur.finals.length > 4) cur.finals.shift();
     const advanced = cur.pos > cur.lastPos; cur.lastPos = cur.pos;
@@ -835,7 +883,7 @@ function buildPlan() {
 }
 
 let running = false, challenge = false, timeUp = false, chalLeft = 0, chalName = '';
-function cancelAsk() { if (!cur || cur.done) return; cur.done = true; listen(false); const r = cur.res; $('card').className = 'hidden'; cur = null; r(); }
+function cancelAsk() { if (!cur || cur.done) return; cur.done = true; listen(false); const r = cur.res; $('card').className = 'hidden'; $('flow').className = ''; cur = null; r(); }
 function fmtT(t) { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
 function tickTimer(dt) {
   if (!challenge || !running || timeUp) return;
@@ -856,7 +904,7 @@ function chalChain() {
   return moves;
 }
 async function runChallenge() {
-  running = true; challenge = true; timeUp = false; chalLeft = CHAL_SECS; stat = { lines: 0, first: 0, wrong: 0, goals: 0 };
+  running = true; challenge = true; timeUp = false; chalLeft = CHAL_SECS; stat = { lines: 0, first: 0, wrong: 0, goals: 0, darj: 0 };
   newWorld(); setCrowd(.1); $('clock').style.display = 'none'; $('timer').className = 'on'; $('timer').textContent = fmtT(chalLeft);
   await EV.kickoff({ team: 'red' });
   while (!timeUp) {
@@ -869,13 +917,13 @@ async function runChallenge() {
     }
   }
   setCrowd(0); running = false; challenge = false; stopRec(); $('timer').className = ''; $('clock').style.display = '';
-  const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5;
+  const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5 + stat.darj * 10;
   $('chalTitle').textContent = 'انْتَهى الوَقْتُ' + (chalName ? ' يا ' + chalName : '') + '!';
-  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
+  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
   $('chalEnd').className = 'screen';
 }
 async function runMatch() {
-  running = true; challenge = false; timeUp = false; newWorld(); stat = { lines: 0, first: 0, wrong: 0, goals: 0 };
+  running = true; challenge = false; timeUp = false; newWorld(); stat = { lines: 0, first: 0, wrong: 0, goals: 0, darj: 0 };
   const plan = buildPlan();
   const hIdx = plan.findIndex(e => e.k === 'halftime'), E = plan.length;
   setCrowd(.1);
@@ -907,6 +955,8 @@ function showNames() {
   NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.className = n === chalName ? 'sel' : ''; b.onclick = () => { chalName = n; [...box.children].forEach(c => c.className = c === b ? 'sel' : ''); }; box.appendChild(b); });
   $('pickName').className = 'screen';
 }
+$('lv1').onclick = () => { DARJ = false; $('lv1').className = 'sel'; $('lv2').className = ''; };
+$('lv2').onclick = () => { DARJ = true; $('lv2').className = 'sel'; $('lv1').className = ''; };
 $('go').onclick = begin;
 $('again').onclick = begin;
 $('goChal').onclick = showNames;
