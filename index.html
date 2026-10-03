@@ -316,12 +316,12 @@ const PRAISE = ['أَحْسَنْتَ!', 'مُمْتازٌ!', 'رائِعٌ!', '
 let cur = null, stars = 0, stat = { lines: 0, first: 0, wrong: 0, goals: 0, darj: 0 };
 let DARJ = true; // level 2: the sentence must be read in one flow
 const PREVIEW_MS = 2000;
-function flowBudget(n) { return 1.5 + 0.8 * n; } // seconds allowed from first word to last
+function flowBudget(n) { return 2 + 0.9 * n; } // seconds allowed from first word to last
 function flowTick() { // drains the flow bar
   if (!cur || cur.done || !cur.t0) return;
   const k = Math.max(0, 1 - (performance.now() - cur.t0) / 1000 / cur.budget);
   $('flow').firstElementChild.style.transform = 'scaleX(' + k + ')';
-  if (k > 0) requestAnimationFrame(flowTick);
+  if (k > 0) requestAnimationFrame(flowTick); else resetSentence();
 }
 function setStatus(cls, html) { const e = $('status'); e.className = cls; e.innerHTML = html; }
 
@@ -374,6 +374,17 @@ function align(toks, units) {
     }
   }
   return pos;
+}
+function resetSentence() { // level 2: the flow bar ran out — read it again from the start
+  if (!cur || cur.done) return;
+  cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; cur.fluentFinal = false; renderLine();
+  $('flow').firstElementChild.style.transform = 'scaleX(1)';
+  S.buzz(); if (cur.resets >= 2) { cur.wrong++; stat.wrong++; }
+  const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
+  bubble('تَوَقَّفْتَ!', 'bad');
+  setStatus('reset', '⏱ انْتَهى الوَقْتُ! اقْرَأْها دَرْجاً مِنَ البِدايَةِ بِلا تَوَقُّفٍ');
+  showHint();
+  clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2500);
 }
 function nextWord() { return cur && cur.pos < cur.units.length ? cur.units[cur.pos].disp : ''; }
 function listenStatus() {
@@ -462,20 +473,6 @@ function onSpeech(alts, final) {
   if (newHit) {
     cur.lastHit = performance.now(); S.tick(); clearTimeout(cur.stT);
     setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>');
-  }
-  if (final && text && DARJ && cur.pos > 0) {
-    // level 2: a pause mid-sentence restarts it
-    const pieceFull = align(tokens(norm(text)), cur.units) >= cur.units.length;
-    if (!pieceFull) {
-      cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; renderLine();
-      $('flow').firstElementChild.style.transform = 'scaleX(1)';
-      S.buzz(); if (cur.resets >= 2) { cur.wrong++; stat.wrong++; }
-      const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
-      bubble('تَوَقَّفْتَ!', 'bad');
-      setStatus('reset', '⏸ تَوَقَّفْتَ! اقْرَأْها دَرْجاً مِنَ البِدايَةِ بِلا تَوَقُّفٍ');
-      clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2500);
-      return;
-    }
   }
   if (final && text) {
     cur.finals.push(text); if (cur.finals.length > 4) cur.finals.shift();
