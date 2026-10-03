@@ -78,6 +78,8 @@
   .screen .big { font-size: calc(var(--u)*6); font-weight: 800; direction: ltr; }
   .btn { font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*3.2); background: #ffd166; color: #111; border: 0; border-radius: calc(var(--u)*1.4); padding: calc(var(--u)*.6) calc(var(--u)*3); cursor: pointer; box-shadow: 0 6px 0 #b8860b; }
   .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b8860b; }
+  #dbg { position: absolute; left: calc(var(--u)*1); top: calc(var(--u)*10); width: calc(var(--u)*34); max-height: 60%; overflow: hidden; background: rgba(0,0,0,.8); color: #d1d5db; font: calc(var(--u)*1.3)/1.5 monospace; padding: calc(var(--u)*.8); border-radius: calc(var(--u)*.6); direction: rtl; text-align: right; display: none; }
+  #dbg.on { display: block; } #dbg .f { color: #fde68a; } #dbg .i { color: #9ca3af; } #dbg .h { color: #86efac; }
   #pauseOv { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--u)*12); background: rgba(0,0,0,.45); border-radius: calc(var(--u)*.6); }
   #pauseOv.hidden { display: none; }
 </style>
@@ -136,6 +138,7 @@
     <button class="btn" id="again">مُباراةٌ جَديدَةٌ</button>
   </div>
   <div id="pauseOv" class="hidden">⏸</div>
+  <div id="dbg"></div>
 </div>
 
 <script>
@@ -328,7 +331,7 @@ function showHint() {
 }
 function ask(spec) {
   return new Promise(res => {
-    cur = { spec, sat: new Set(), wrong: 0, got: false, res, done: false };
+    cur = { spec, sat: new Set(), wrong: 0, got: false, res, done: false, finals: [], lastHit: 0 };
     if (timeUp) { cur = null; return res(); }
     renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
     $('card').className = cardPos();
@@ -357,22 +360,33 @@ function miss(kind) {
   if (cur.wrong >= 1) showHint();
   if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
 }
+const dbgLines = [];
+function dbg(cls, txt) { dbgLines.push(`<span class="${cls}">${txt}</span>`); if (dbgLines.length > 14) dbgLines.shift(); $('dbg').innerHTML = dbgLines.join('<br>'); console.log('[SR]', txt); }
 function onSpeech(alts, final) {
   if (!cur || cur.done || paused || !accepting || speaking || !micOK) return;
-  const text = alts[0] || '';
+  const text = (alts[0] || '').trim();
   const latin = /[a-z]{2,}/i.test(text);
-  $('heard').textContent = latin ? '' : (text ? 'سَمِعْتُ: «' + text.trim() + '»' : '');
-  let newHit = false;
+  if (text) $('heard').textContent = latin ? '' : 'سَمِعْتُ: «' + text + '»';
+  // everything heard since this prompt started, so a sentence split into pieces still counts
+  const sofar = [...cur.finals, text].join(' ');
+  const cands = [sofar, ...alts];
+  let newHit = false, anyHit = false;
   cur.spec.groups.forEach((g, i) => {
-    if (cur.sat.has(i)) return;
-    if (alts.some(a => groupMatch(a, g))) { cur.sat.add(i); cur.got = true; newHit = true; }
+    const hit = cands.some(a => groupMatch(a, g));
+    if (hit) anyHit = true;
+    if (!cur.sat.has(i) && hit) { cur.sat.add(i); newHit = true; }
   });
+  dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + (newHit ? ' ✔' : anyHit ? ' ~' : ''));
   renderLine();
   if (cur.sat.size === cur.spec.groups.length) return success();
-  if (newHit) { S.tick(); clearTimeout(cur.stT); setStatus('part', '✔ أَكْمِلْ: <span class="miss">' + missingWords().join(' … ') + '</span>'); }
-  if (final) {
-    if (!cur.got) miss(latin ? 'en' : 'wrong');
-    cur.got = false;
+  if (newHit) { cur.lastHit = performance.now(); S.tick(); clearTimeout(cur.stT); setStatus('part', '✔ أَكْمِلْ: <span class="miss">' + missingWords().join(' … ') + '</span>'); }
+  if (final && text) {
+    cur.finals.push(text); if (cur.finals.length > 4) cur.finals.shift();
+    const words = tokens(norm(text)).length;
+    // buzz only when a piece with real content had nothing correct in it, and not right after a correct word
+    const recentHit = performance.now() - cur.lastHit < 2500;
+    if (!anyHit && !recentHit && (words >= 2 || latin)) miss(latin ? 'en' : 'wrong');
+    else if (!newHit) listenStatus();
   }
 }
 function speakLine() {
@@ -863,10 +877,12 @@ addEventListener('keydown', e => {
   else if (k === 'h') { if (cur) { showHint(); speakLine(); } }
   else if (k === 'p') togglePause();
   else if (k === 's') { muted = !muted; if (master) master.gain.value = muted ? 0 : .9; }
+  else if (k === 'd') $('dbg').classList.toggle('on');
   else if (k === 'm') { if (SR) { micOK = !micOK; if (!rec) initRec(); listen(micOK && !!cur && !paused); micUI(); } }
 });
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
 
+window.__sr = (t, f) => onSpeech([t], f); // for automated tests
 newWorld(); micUI(); requestAnimationFrame(frame);
 })();
 </script>
