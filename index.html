@@ -39,6 +39,7 @@
   #line .kw { color: #fff; border-bottom-color: rgba(255,255,255,.25); }
   #line .kw.ok { color: #4ade80; border-bottom-color: #4ade80; }
   #line .kw.next { color: #ffd166; border-bottom-color: #ffd166; border-bottom-style: solid; }
+  #line .kw.bad { color: #f87171; border-bottom-color: #f87171; border-bottom-style: solid; }
   #line .num { font-family: 'Cairo', sans-serif; font-weight: 800; direction: ltr; unicode-bidi: isolate; }
   #hint { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.6); color: #93c5fd; min-height: 0; }
   #hint:empty { display: none; }
@@ -154,6 +155,7 @@
   <div id="dbg"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@1/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
 <script>
 (() => {
 // ---------------- setup / scaling ----------------
@@ -230,7 +232,7 @@ const S = {
 // ---------------- speech recognition ----------------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, micOK = !!SR, accepting = false, recRunning = false, recWanted = false, speaking = false;
-function micUI() { const m = $('mic'); m.className = !micOK ? 'off' : (recRunning && accepting ? 'on' : ''); m.textContent = micOK ? '🎤' : '🚫'; }
+function micUI() { const m = $('mic'); m.className = !micOK ? 'off' : (recRunning && accepting ? 'on' : ''); m.textContent = micOK ? '🎤' : '🚫'; m.title = typeof ENGINE !== 'undefined' ? ENGINE : ''; }
 function initRec() {
   if (!SR || rec) { micUI(); return; }
   rec = new SR(); rec.lang = LANG; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
@@ -249,7 +251,102 @@ function initRec() {
 // between prompts we simply ignore what it hears
 function startRec() { recWanted = true; if (rec && micOK && !recRunning) { try { rec.start(); } catch (e) {} } }
 function stopRec() { recWanted = false; if (rec && recRunning) { try { rec.abort(); } catch (e) {} } }
-function listen(on) { accepting = on; if (on) startRec(); micUI(); }
+function listen(on) {
+  accepting = on;
+  if (ENGINE === 'azure') { if (on) azStart(); else azStop(); micUI(); return; }
+  if (on) startRec(); micUI();
+}
+
+// ---------------- Azure Speech (pronunciation assessment) ----------------
+const TOKEN_URL = params.get('token') || 'https://wabel-token-14522.azurewebsites.net/api/token';
+const AZ_LANG = params.get('alang') || 'ar-SA';
+const MIN_ACC = +params.get('acc') || 50;   // per-word pronunciation score needed (0-100)
+const FLU_OK = +params.get('flu') || 60;    // fluency score for "دَرْج" stars (0-100)
+let ENGINE = 'chrome', azTok = null, azTokAt = 0, azRec = null, azFor = null;
+async function azToken(force) {
+  if (!force && azTok && Date.now() - azTokAt < 8 * 60e3) return azTok;
+  const r = await fetch(TOKEN_URL, { cache: 'no-store' });
+  if (!r.ok) throw new Error('token ' + r.status);
+  azTok = await r.json(); azTokAt = Date.now(); return azTok;
+}
+async function azInit() {
+  if (!window.SpeechSDK || params.get('engine') === 'chrome') return false;
+  try { await azToken(true); ENGINE = 'azure'; micOK = true; micUI(); return true; }
+  catch (e) { console.warn('Azure speech unavailable, using Chrome', e); return false; }
+}
+function azStop() {
+  const r = azRec; azRec = null; azFor = null; recRunning = false;
+  if (r) { try { r.stopContinuousRecognitionAsync(() => r.close(), () => r.close()); } catch (e) {} }
+  micUI();
+}
+async function azStart() {
+  if (!cur || cur.done) return;
+  if (azFor === cur && azRec) return;
+  azStop();
+  const me = cur; azFor = me;
+  let t;
+  try { t = await azToken(); }
+  catch (e) { console.warn(e); ENGINE = 'chrome'; initRec(); startRec(); micUI(); return; }
+  if (cur !== me || me.done || !accepting) { if (azFor === me) azFor = null; return; }
+  const sdk = window.SpeechSDK;
+  const cfg = sdk.SpeechConfig.fromAuthorizationToken(t.token, t.region);
+  cfg.speechRecognitionLanguage = AZ_LANG;
+  cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, DARJ ? '1300' : '2500');
+  const ref = me.ref.map(r => r.raw).join(' ');
+  const pa = new sdk.PronunciationAssessmentConfig(ref, sdk.PronunciationAssessmentGradingSystem.HundredMark, sdk.PronunciationAssessmentGranularity.Word, true);
+  const rec = new sdk.SpeechRecognizer(cfg, sdk.AudioConfig.fromDefaultMicrophoneInput());
+  pa.applyTo(rec);
+  try { const pl = sdk.PhraseListGrammar.fromRecognizer(rec); NAMES.forEach(n => pl.addPhrase(n)); pl.addPhrase(ref); } catch (e) {}
+  rec.recognizing = (s, e) => { if (cur === me) azInterim(e.result.text); };
+  rec.recognized = (s, e) => { if (cur === me && e.result.reason === sdk.ResultReason.RecognizedSpeech) azFinal(e.result); };
+  rec.canceled = (s, e) => {
+    console.warn('Azure canceled', e.errorDetails);
+    if (e.errorDetails && /auth|401|403|token/i.test(e.errorDetails)) azTok = null;
+    if (azRec === rec) { azRec = null; azFor = null; recRunning = false; micUI(); if (cur === me && !me.done && accepting) setTimeout(() => accepting && azStart(), 700); }
+  };
+  azRec = rec;
+  rec.startContinuousRecognitionAsync(() => { recRunning = true; micUI(); }, err => console.warn('Azure start', err));
+}
+function azInterim(text) {
+  if (!cur || cur.done || !accepting || speaking || !text) return;
+  $('heard').textContent = 'سَمِعْتُ: «' + text + '»';
+  cur.unitState = null;
+  cur.pos = align(tokens(norm(text)), cur.units);
+  renderLine();
+  dbg('i', '○ ' + text);
+}
+function azFinal(res) {
+  if (!cur || cur.done || !accepting || speaking) return;
+  let j; try { j = JSON.parse(res.properties.getProperty(window.SpeechSDK ? SpeechSDK.PropertyId.SpeechServiceResponse_JsonResult : 0)); } catch (e) { return; }
+  const nb = (j.NBest || [])[0]; if (!nb) return;
+  const text = res.text || nb.Display || '';
+  const A = nb.PronunciationAssessment || {};
+  if (text) $('heard').textContent = 'سَمِعْتُ: «' + text + '»';
+  const words = (nb.Words || []).filter(w => (w.PronunciationAssessment || {}).ErrorType !== 'Insertion');
+  const st = cur.ref.map(() => null);
+  if (words.length === cur.ref.length) words.forEach((w, i) => st[i] = w);
+  else { let k = 0; words.forEach(w => { for (let i = k; i < cur.ref.length; i++) if (wmatch(norm(w.Word || ''), cur.ref[i].w)) { st[i] = w; k = i + 1; break; } }); }
+  const wa = w => (w && w.PronunciationAssessment) || {};
+  const okW = st.map(w => !!w && wa(w).ErrorType !== 'Omission' && (wa(w).AccuracyScore || 0) >= MIN_ACC);
+  if (!DARJ) okW.forEach((v, i) => { if (v) cur.refOk.add(i); });
+  const good = i => DARJ ? okW[i] : cur.refOk.has(i);
+  cur.unitState = cur.units.map((u, ui) => {
+    const idx = cur.ref.map((r, i) => r.u === ui ? i : -1).filter(i => i >= 0);
+    if (idx.every(good)) return 'ok';
+    return idx.some(i => st[i] && wa(st[i]).ErrorType !== 'Omission') ? 'bad' : '';
+  });
+  cur.pos = 0; renderLine();
+  dbg('f', '● ' + text + ' | دقة ' + Math.round(A.AccuracyScore || 0) + ' طلاقة ' + Math.round(A.FluencyScore || 0) + ' | ' + st.map((w, i) => cur.ref[i].raw + ':' + (w ? Math.round(wa(w).AccuracyScore || 0) + (wa(w).ErrorType !== 'None' ? '/' + wa(w).ErrorType : '') : '-')).join(' '));
+  cur.acc = A.AccuracyScore; cur.flu = A.FluencyScore;
+  if (cur.ref.every((_, i) => good(i))) { cur.fluentAz = DARJ && (A.FluencyScore || 0) >= FLU_OK; return success(); }
+  const anyOk = okW.some(Boolean);
+  if (DARJ || !anyOk) miss(anyOk ? 'part' : 'wrong');
+  else { S.tick(); setStatus('part', '✔ أَكْمِلْ: <span class="miss">' + missWords().join(' … ') + '</span>'); }
+}
+function missWords() {
+  if (cur.unitState) return cur.units.filter((u, i) => cur.unitState[i] !== 'ok').map(u => u.disp);
+  return [nextWord()];
+}
 
 // ---------------- Arabic matching ----------------
 function norm(s) {
@@ -359,19 +456,18 @@ function unitMatch(tok, u, sub) { // returns {ok, sub} — sub = progress inside
   }
   return { ok: wmatch(tok, u.key), sub: 0 };
 }
+// synonyms / common mishearings for hard words (normalized)
+const ALT = { 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
+function umatch(tok, u) { return wmatch(tok, u.key) || (ALT[u.key] || []).some(k => wmatch(tok, k)); }
+function unitOk(tok, u, sub) { if (u.num !== undefined) return unitMatch(tok, u, sub); return { ok: umatch(tok, u), sub: 0 }; }
 function align(toks, units) {
   let pos = 0, sub = 0;
-  for (const tok of toks) {
+  for (let ti = 0; ti < toks.length; ti++) {
+    const tok = toks[ti];
     if (pos >= units.length) break;
-    const r = unitMatch(tok, units[pos], sub);
+    const r = unitOk(tok, units[pos], sub);
     if (r.ok) { pos++; sub = 0; continue; }
     if (r.partial) { sub = r.sub; continue; }
-    // a short function word (رقم، إلى، من…) the recognizer dropped: allow skipping it when the next word matches
-    const u = units[pos];
-    if (u.key && u.key.length <= 3 && pos + 1 < units.length) {
-      const r2 = unitMatch(tok, units[pos + 1], 0);
-      if (r2.ok) { pos += 2; sub = 0; } else if (r2.partial) { pos += 1; sub = r2.sub; }
-    }
   }
   return pos;
 }
@@ -398,7 +494,9 @@ function renderLine() {
     const sp = document.createElement('span');
     sp.textContent = u.disp;
     if (u.num !== undefined) sp.classList.add('num');
-    sp.classList.add('kw'); if (i < cur.pos) sp.classList.add('ok'); if (i === cur.pos) sp.classList.add('next');
+    sp.classList.add('kw');
+    if (cur.unitState) { if (cur.unitState[i]) sp.classList.add(cur.unitState[i]); }
+    else { if (i < cur.pos) sp.classList.add('ok'); if (i === cur.pos) sp.classList.add('next'); }
     el.appendChild(sp); el.appendChild(document.createTextNode(' '));
   });
 }
@@ -417,8 +515,12 @@ function ask(spec) {
     if (timeUp) { cur = null; return res(); }
     cur = { spec, units: compile(spec), pos: 0, wrong: 0, res, done: false, finals: [], lastHit: 0, lastPos: 0, t0: 0, resets: 0 };
     cur.budget = flowBudget(cur.units.length);
+    cur.ref = []; cur.refOk = new Set(); cur.unitState = null;
+    cur.units.forEach((u, i) => (u.num !== undefined ? NUMW[u.num].split(' ') : [u.disp]).forEach(w => {
+      const raw = w.replace(/[\u064B-\u0652!،؟.:]/g, ''); if (raw) cur.ref.push({ u: i, raw, w: norm(raw) });
+    }));
     renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
-    $('card').className = cardPos(); $('flow').className = DARJ ? 'on' : ''; $('flow').firstElementChild.style.transform = 'scaleX(1)';
+    $('card').className = cardPos(); $('flow').className = DARJ && ENGINE !== 'azure' ? 'on' : ''; $('flow').firstElementChild.style.transform = 'scaleX(1)';
     setCrowd(.015);
     if (DARJ) { // silent preview first, then go
       setStatus('prep', '👀 اقْرَأْها في سِرِّكَ… اسْتَعِدَّ');
@@ -431,9 +533,10 @@ function cardPos() { return focusP && focusP.y > 540 ? 'top' : ''; }
 function success() {
   if (!cur || cur.done) return;
   cur.done = true; listen(false);
-  cur.pos = cur.units.length; renderLine();
+  cur.unitState = null; cur.pos = cur.units.length; renderLine();
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
-  const fluent = secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5);
+  const fluent = ENGINE === 'azure' ? !!cur.fluentAz : (secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5));
+  if (ENGINE === 'azure' && cur.acc != null) { stat.accSum = (stat.accSum || 0) + cur.acc; stat.accN = (stat.accN || 0) + 1; }
   S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
   stat.lines++; if (cur.wrong === 0) stat.first++; if (fluent) stat.darj++;
   bubble(fluent ? 'دَرْجٌ مُمْتازٌ! ⭐⭐' : pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
@@ -447,7 +550,8 @@ function miss(kind) {
   cur.wrong++; stat.wrong++; S.buzz();
   const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
   bubble(kind === 'en' ? 'بِالعَرَبِيَّةِ مِنْ فَضْلِكَ!' : 'حاوِلْ مَرَّةً أُخْرى!', 'bad');
-  setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَسْمَعْها صَحيحَةً.') + ' قُلْ: <span class="miss">' + nextWord() + '</span>');
+  if (kind === 'part') setStatus('bad', '✘ اقْرَأِ الجُمْلَةَ كامِلَةً دَرْجاً. انْتَبِهْ: <span class="miss">' + missWords().join(' … ') + '</span>');
+  else setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَسْمَعْها صَحيحَةً.') + ' قُلْ: <span class="miss">' + (ENGINE === 'azure' ? missWords().join(' … ') : nextWord()) + '</span>');
   clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2200);
   if (cur.wrong >= 1) showHint();
   if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
@@ -916,7 +1020,7 @@ async function runChallenge() {
   setCrowd(0); running = false; challenge = false; stopRec(); $('timer').className = ''; $('clock').style.display = '';
   const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5 + stat.darj * 10;
   $('chalTitle').textContent = 'انْتَهى الوَقْتُ' + (chalName ? ' يا ' + chalName : '') + '!';
-  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
+  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b>${stat.accN ? `<span>🎯 دِقَّةُ النُّطْقِ</span><b>${Math.round(stat.accSum / stat.accN)}%</b>` : ''}<div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
   $('chalEnd').className = 'screen';
 }
 async function runMatch() {
@@ -941,7 +1045,7 @@ async function runMatch() {
 async function prep() {
   initAudio(); if (AC.state === 'suspended') AC.resume();
   try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); } catch (e) { if (SR) micOK = false; }
-  initRec(); startRec();
+  if (!(await azInit())) { initRec(); startRec(); }
   ['start', 'end', 'pickName', 'chalEnd'].forEach(id => $(id).className = 'screen hidden');
 }
 async function begin() { await prep(); runMatch(); }
@@ -978,6 +1082,8 @@ addEventListener('keydown', e => {
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
 
 window.__sr = (t, f) => onSpeech([t], f); // for automated tests
+window.__az = (json, text) => { ENGINE = 'azure'; azFinal({ text, properties: { getProperty: () => JSON.stringify(json) } }); };
+window.__cur = () => cur;
 newWorld(); micUI(); requestAnimationFrame(frame);
 })();
 </script>
