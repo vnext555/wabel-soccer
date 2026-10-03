@@ -257,11 +257,14 @@ function listen(on) {
   if (on) startRec(); micUI();
 }
 
-// ---------------- Azure Speech (pronunciation assessment) ----------------
+// ---------------- Azure Speech ----------------
+// Azure's regular recognizer (it does not know the expected sentence, so it can't be "talked into" hearing it),
+// then every word of the sentence must appear, in order. In دَرْج mode the whole sentence must arrive as one
+// utterance: Azure only splits speech on a real silence (GAP ms), so a reader who stops mid-sentence starts over.
 const TOKEN_URL = params.get('token') || 'https://wabel-token-14522.azurewebsites.net/api/token';
 const AZ_LANG = params.get('alang') || 'ar-SA';
-const MIN_ACC = +params.get('acc') || 50;   // per-word pronunciation score needed (0-100)
-const FLU_OK = +params.get('flu') || 60;    // fluency score for "دَرْج" stars (0-100)
+const GAP = +params.get('gap') || 1000;
+const VERBS = ['يراوغ', 'يركض', 'يمرر', 'يسدد', 'يركل', 'يعترض', 'ينتزع', 'يعرقل', 'يلوح', 'يهاجم', 'يمسك', 'تصدى', 'تصديا', 'بارعا', 'بقوة', 'الكرة', 'ركنية', 'الحارس', 'صفراء', 'هدف'];
 let ENGINE = 'chrome', azTok = null, azTokAt = 0, azRec = null, azFor = null;
 async function azToken(force) {
   if (!force && azTok && Date.now() - azTokAt < 8 * 60e3) return azTok;
@@ -291,14 +294,11 @@ async function azStart() {
   const sdk = window.SpeechSDK;
   const cfg = sdk.SpeechConfig.fromAuthorizationToken(t.token, t.region);
   cfg.speechRecognitionLanguage = AZ_LANG;
-  cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, DARJ ? '1300' : '2500');
-  const ref = me.ref.map(r => r.raw).join(' ');
-  const pa = new sdk.PronunciationAssessmentConfig(ref, sdk.PronunciationAssessmentGradingSystem.HundredMark, sdk.PronunciationAssessmentGranularity.Word, true);
+  cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(DARJ ? GAP : 2500));
   const rec = new sdk.SpeechRecognizer(cfg, sdk.AudioConfig.fromDefaultMicrophoneInput());
-  pa.applyTo(rec);
-  try { const pl = sdk.PhraseListGrammar.fromRecognizer(rec); NAMES.forEach(n => pl.addPhrase(n)); pl.addPhrase(ref); } catch (e) {}
-  rec.recognizing = (s, e) => { if (cur === me) azInterim(e.result.text); };
-  rec.recognized = (s, e) => { if (cur === me && e.result.reason === sdk.ResultReason.RecognizedSpeech) azFinal(e.result); };
+  try { const pl = sdk.PhraseListGrammar.fromRecognizer(rec); [...NAMES, ...VERBS].forEach(w => pl.addPhrase(w)); } catch (e) {}
+  rec.recognizing = (s, e) => { if (cur === me) azText(e.result.text, false); };
+  rec.recognized = (s, e) => { if (cur === me && e.result.reason === sdk.ResultReason.RecognizedSpeech) azText(e.result.text, true); };
   rec.canceled = (s, e) => {
     console.warn('Azure canceled', e.errorDetails);
     if (e.errorDetails && /auth|401|403|token/i.test(e.errorDetails)) azTok = null;
@@ -307,41 +307,28 @@ async function azStart() {
   azRec = rec;
   rec.startContinuousRecognitionAsync(() => { recRunning = true; micUI(); }, err => console.warn('Azure start', err));
 }
-function azInterim(text) {
-  if (!cur || cur.done || !accepting || speaking || !text) return;
-  $('heard').textContent = 'سَمِعْتُ: «' + text + '»';
-  cur.unitState = null;
-  cur.pos = align(tokens(norm(text)), cur.units);
-  renderLine();
-  dbg('i', '○ ' + text);
-}
-function azFinal(res) {
+function azText(text, final) {
   if (!cur || cur.done || !accepting || speaking) return;
-  let j; try { j = JSON.parse(res.properties.getProperty(window.SpeechSDK ? SpeechSDK.PropertyId.SpeechServiceResponse_JsonResult : 0)); } catch (e) { return; }
-  const nb = (j.NBest || [])[0]; if (!nb) return;
-  const text = res.text || nb.Display || '';
-  const A = nb.PronunciationAssessment || {};
-  if (text) $('heard').textContent = 'سَمِعْتُ: «' + text + '»';
-  const words = (nb.Words || []).filter(w => (w.PronunciationAssessment || {}).ErrorType !== 'Insertion');
-  const st = cur.ref.map(() => null);
-  if (words.length === cur.ref.length) words.forEach((w, i) => st[i] = w);
-  else { let k = 0; words.forEach(w => { for (let i = k; i < cur.ref.length; i++) if (wmatch(norm(w.Word || ''), cur.ref[i].w)) { st[i] = w; k = i + 1; break; } }); }
-  const wa = w => (w && w.PronunciationAssessment) || {};
-  const okW = st.map(w => !!w && wa(w).ErrorType !== 'Omission' && (wa(w).AccuracyScore || 0) >= MIN_ACC);
-  if (!DARJ) okW.forEach((v, i) => { if (v) cur.refOk.add(i); });
-  const good = i => DARJ ? okW[i] : cur.refOk.has(i);
-  cur.unitState = cur.units.map((u, ui) => {
-    const idx = cur.ref.map((r, i) => r.u === ui ? i : -1).filter(i => i >= 0);
-    if (idx.every(good)) return 'ok';
-    return idx.some(i => st[i] && wa(st[i]).ErrorType !== 'Omission') ? 'bad' : '';
-  });
-  cur.pos = 0; renderLine();
-  dbg('f', '● ' + text + ' | دقة ' + Math.round(A.AccuracyScore || 0) + ' طلاقة ' + Math.round(A.FluencyScore || 0) + ' | ' + st.map((w, i) => cur.ref[i].raw + ':' + (w ? Math.round(wa(w).AccuracyScore || 0) + (wa(w).ErrorType !== 'None' ? '/' + wa(w).ErrorType : '') : '-')).join(' '));
-  cur.acc = A.AccuracyScore; cur.flu = A.FluencyScore;
-  if (cur.ref.every((_, i) => good(i))) { cur.fluentAz = DARJ && (A.FluencyScore || 0) >= FLU_OK; return success(); }
-  const anyOk = okW.some(Boolean);
-  if (DARJ || !anyOk) miss(anyOk ? 'part' : 'wrong');
-  else { S.tick(); setStatus('part', '✔ أَكْمِلْ: <span class="miss">' + missWords().join(' … ') + '</span>'); }
+  text = (text || '').trim(); if (!text) return;
+  $('heard').textContent = 'سَمِعْتُ: «' + text + '»';
+  // دَرْج: judge this utterance alone; level 1: everything said since the sentence appeared
+  const said = DARJ ? text : [...cur.finals, text].join(' ');
+  const before = cur.pos;
+  cur.pos = align(tokens(norm(said)), cur.units);
+  renderLine();
+  dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
+  if (cur.pos >= cur.units.length) { cur.fluentAz = DARJ || cur.finals.length === 0; return success(); }
+  if (!final) { if (cur.pos > before) { S.tick(); setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>'); } return; }
+  cur.finals.push(text);
+  if (DARJ) {
+    const got = cur.pos, wrongAt = cur.units[got] ? cur.units[got].disp : '';
+    const nTok = tokens(norm(text)).length;
+    cur.pos = 0; cur.finals = []; renderLine();
+    if (/[a-z]{2,}/i.test(text)) miss('en');
+    else if (got > 0 && nTok <= got) miss('stop');             // ended early: a pause in the middle
+    else { cur.badWord = wrongAt; miss('word'); }               // read on, but a word was wrong
+  } else if (cur.pos === before) miss(/[a-z]{2,}/i.test(text) ? 'en' : 'wrong');
+  else listenStatus();
 }
 function missWords() {
   if (cur.unitState) return cur.units.filter((u, i) => cur.unitState[i] !== 'ok').map(u => u.disp);
@@ -435,7 +422,8 @@ function wmatch(tok, key) {
   if (tok === key) return true;
   const a = stripPre(tok), b = stripPre(key);
   if (a === b) return true;
-  if (a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  if (ENGINE !== 'azure' && a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  if (ENGINE === 'azure') return false;
   const L = Math.max(a.length, b.length);
   return L >= 3 && 1 - lev(a, b) / L >= 0.67;
 }
@@ -536,7 +524,6 @@ function success() {
   cur.unitState = null; cur.pos = cur.units.length; renderLine();
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
   const fluent = ENGINE === 'azure' ? !!cur.fluentAz : (secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5));
-  if (ENGINE === 'azure' && cur.acc != null) { stat.accSum = (stat.accSum || 0) + cur.acc; stat.accN = (stat.accN || 0) + 1; }
   S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
   stat.lines++; if (cur.wrong === 0) stat.first++; if (fluent) stat.darj++;
   bubble(fluent ? 'دَرْجٌ مُمْتازٌ! ⭐⭐' : pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
@@ -549,9 +536,11 @@ function miss(kind) {
   if (!cur || cur.done) return;
   cur.wrong++; stat.wrong++; S.buzz();
   const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
-  bubble(kind === 'en' ? 'بِالعَرَبِيَّةِ مِنْ فَضْلِكَ!' : 'حاوِلْ مَرَّةً أُخْرى!', 'bad');
-  if (kind === 'part') setStatus('bad', '✘ اقْرَأِ الجُمْلَةَ كامِلَةً دَرْجاً. انْتَبِهْ: <span class="miss">' + missWords().join(' … ') + '</span>');
-  else setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَسْمَعْها صَحيحَةً.') + ' قُلْ: <span class="miss">' + (ENGINE === 'azure' ? missWords().join(' … ') : nextWord()) + '</span>');
+  bubble(kind === 'en' ? 'بِالعَرَبِيَّةِ مِنْ فَضْلِكَ!' : kind === 'stop' ? 'تَوَقَّفْتَ!' : 'حاوِلْ مَرَّةً أُخْرى!', 'bad');
+  if (kind === 'word') setStatus('bad', '✘ كَلِمَةٌ غَيْرُ صَحيحَةٍ: <span class="miss">' + cur.badWord + '</span> — اقْرَأِ الجُمْلَةَ مِنَ البِدايَةِ');
+  else if (kind === 'stop') setStatus('reset', '⏸ تَوَقَّفْتَ قَبْلَ نِهايَةِ الجُمْلَةِ! اقْرَأْها كامِلَةً دَرْجاً مِنَ البِدايَةِ');
+  else if (kind === 'part') setStatus('bad', '✘ اقْرَأِ الجُمْلَةَ كامِلَةً دَرْجاً. انْتَبِهْ: <span class="miss">' + missWords().join(' … ') + '</span>');
+  else setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَسْمَعْها صَحيحَةً.') + ' قُلْ: <span class="miss">' + nextWord() + '</span>');
   clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2200);
   if (cur.wrong >= 1) showHint();
   if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
@@ -1020,7 +1009,7 @@ async function runChallenge() {
   setCrowd(0); running = false; challenge = false; stopRec(); $('timer').className = ''; $('clock').style.display = '';
   const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5 + stat.darj * 10;
   $('chalTitle').textContent = 'انْتَهى الوَقْتُ' + (chalName ? ' يا ' + chalName : '') + '!';
-  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b>${stat.accN ? `<span>🎯 دِقَّةُ النُّطْقِ</span><b>${Math.round(stat.accSum / stat.accN)}%</b>` : ''}<div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
+  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
   $('chalEnd').className = 'screen';
 }
 async function runMatch() {
@@ -1082,7 +1071,7 @@ addEventListener('keydown', e => {
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
 
 window.__sr = (t, f) => onSpeech([t], f); // for automated tests
-window.__az = (json, text) => { ENGINE = 'azure'; azFinal({ text, properties: { getProperty: () => JSON.stringify(json) } }); };
+window.__az = (text, final) => { ENGINE = 'azure'; azText(text, final); };
 window.__cur = () => cur;
 newWorld(); micUI(); requestAnimationFrame(frame);
 })();
