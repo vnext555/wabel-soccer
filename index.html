@@ -36,7 +36,9 @@
   @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-2%)} 40%{transform:translateX(2%)} 60%{transform:translateX(-1.5%)} 80%{transform:translateX(1.5%)} }
   #line { font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*4.4); line-height: 1.6; }
   #line .kw { color: #ffd166; border-bottom: calc(var(--u)*.25) dashed rgba(255,209,102,.6); transition: color .2s; }
+  #line .kw { color: #fff; border-bottom-color: rgba(255,255,255,.25); }
   #line .kw.ok { color: #4ade80; border-bottom-color: #4ade80; }
+  #line .kw.next { color: #ffd166; border-bottom-color: #ffd166; border-bottom-style: solid; }
   #line .num { font-family: 'Cairo', sans-serif; font-weight: 800; direction: ltr; unicode-bidi: isolate; }
   #hint { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.6); color: #93c5fd; min-height: 0; }
   #hint:empty { display: none; }
@@ -299,24 +301,74 @@ const P = {
 };
 
 // ---------------- prompt card ----------------
+const PRAISE = ['أَحْسَنْتَ!', 'مُمْتازٌ!', 'رائِعٌ!', 'بارَكَ اللهُ فيكَ!', 'صَحيحٌ!'];
 let cur = null, stars = 0, stat = { lines: 0, first: 0, wrong: 0, goals: 0 };
 function setStatus(cls, html) { const e = $('status'); e.className = cls; e.innerHTML = html; }
-function missingWords() { return cur.spec.segs.filter(x => x.g !== undefined && !cur.sat.has(x.g) && typeof x.t !== 'number').map(x => x.t.trim()).filter((v, i, a) => v && a.indexOf(v) === i); }
+
+// ---- whole-sentence matching: every word must be read, in order ----
+const stripPre = t => t.replace(/^(و|ف)?(ال)?/, '');
+function lev(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const row = [i]; for (let j = 1; j <= n; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = row; }
+  return prev[n];
+}
+function wmatch(tok, key) {
+  if (!tok || !key) return false;
+  if (tok === key) return true;
+  const a = stripPre(tok), b = stripPre(key);
+  if (a === b) return true;
+  if (a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  const L = Math.max(a.length, b.length);
+  return L >= 3 && 1 - lev(a, b) / L >= 0.67;
+}
+// compile a prompt into word units (a number is one unit that may take several spoken words, or a digit)
+function compile(spec) {
+  const units = [];
+  spec.segs.forEach(sg => {
+    if (typeof sg.t === 'number') units.push({ num: sg.t, disp: String(sg.t), words: NUMW[sg.t].split(' ').map(norm) });
+    else sg.t.split(/\s+/).forEach(w => { const clean = w.replace(/[!،؟.:]/g, ''); if (clean) units.push({ disp: w, key: norm(clean) }); });
+  });
+  return units;
+}
+function unitMatch(tok, u, sub) { // returns {ok, sub} — sub = progress inside a multi-word number
+  if (u.num !== undefined) {
+    if (/^\d+$/.test(tok)) return { ok: +tok === u.num, sub: 0 };
+    if (wmatch(tok, u.words[sub])) return sub + 1 === u.words.length ? { ok: true, sub: 0 } : { ok: false, sub: sub + 1, partial: true };
+    return { ok: false, sub };
+  }
+  return { ok: wmatch(tok, u.key), sub: 0 };
+}
+function align(toks, units) {
+  let pos = 0, sub = 0;
+  for (const tok of toks) {
+    if (pos >= units.length) break;
+    const r = unitMatch(tok, units[pos], sub);
+    if (r.ok) { pos++; sub = 0; continue; }
+    if (r.partial) { sub = r.sub; continue; }
+    // a short function word (رقم، إلى، من…) the recognizer dropped: allow skipping it when the next word matches
+    const u = units[pos];
+    if (u.key && u.key.length <= 3 && pos + 1 < units.length) {
+      const r2 = unitMatch(tok, units[pos + 1], 0);
+      if (r2.ok) { pos += 2; sub = 0; } else if (r2.partial) { pos += 1; sub = r2.sub; }
+    }
+  }
+  return pos;
+}
+function nextWord() { return cur && cur.pos < cur.units.length ? cur.units[cur.pos].disp : ''; }
 function listenStatus() {
   if (!cur || cur.done) return;
   if (!micOK) return setStatus('off', '🚫 المايك مُغْلَقٌ — المُعَلِّمُ يَحْكُمُ');
-  const m = missingWords();
-  setStatus('listen', cur.sat.size ? 'أَكْمِلْ: <span class="miss">' + m.join(' … ') + '</span>' : 'أَنا أَسْمَعُكَ… قُلِ الجُمْلَةَ');
+  setStatus('listen', cur.pos ? 'أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>' : 'أَنا أَسْمَعُكَ… اقْرَأِ الجُمْلَةَ كامِلَةً');
 }
-const PRAISE = ['أَحْسَنْتَ!', 'مُمْتازٌ!', 'رائِعٌ!', 'بارَكَ اللهُ فيكَ!', 'صَحيحٌ!'];
 function renderLine() {
   const el = $('line'); el.innerHTML = '';
-  cur.spec.segs.forEach(s => {
+  cur.units.forEach((u, i) => {
     const sp = document.createElement('span');
-    sp.textContent = s.t;
-    if (typeof s.t === 'number') sp.classList.add('num');
-    if (s.g !== undefined) { sp.classList.add('kw'); if (cur.sat.has(s.g)) sp.classList.add('ok'); }
-    el.appendChild(sp);
+    sp.textContent = u.disp;
+    if (u.num !== undefined) sp.classList.add('num');
+    sp.classList.add('kw'); if (i < cur.pos) sp.classList.add('ok'); if (i === cur.pos) sp.classList.add('next');
+    el.appendChild(sp); el.appendChild(document.createTextNode(' '));
   });
 }
 let bubbleT;
@@ -331,8 +383,8 @@ function showHint() {
 }
 function ask(spec) {
   return new Promise(res => {
-    cur = { spec, sat: new Set(), wrong: 0, got: false, res, done: false, finals: [], lastHit: 0 };
     if (timeUp) { cur = null; return res(); }
+    cur = { spec, units: compile(spec), pos: 0, wrong: 0, res, done: false, finals: [], lastHit: 0, lastPos: 0 };
     renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
     $('card').className = cardPos();
     setCrowd(.015); listen(!paused); listenStatus();
@@ -342,7 +394,7 @@ function cardPos() { return focusP && focusP.y > 540 ? 'top' : ''; }
 function success() {
   if (!cur || cur.done) return;
   cur.done = true; listen(false);
-  cur.spec.groups.forEach((_, i) => cur.sat.add(i)); renderLine();
+  cur.pos = cur.units.length; renderLine();
   S.ding(); S.cheer(1.2, .25); stars++; $('stars').textContent = '⭐ ' + stars;
   stat.lines++; if (cur.wrong === 0) stat.first++;
   bubble(pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
@@ -355,7 +407,7 @@ function miss(kind) {
   cur.wrong++; stat.wrong++; S.buzz();
   const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
   bubble(kind === 'en' ? 'بِالعَرَبِيَّةِ مِنْ فَضْلِكَ!' : 'حاوِلْ مَرَّةً أُخْرى!', 'bad');
-  setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَفْهَمْ.') + ' قُلْ: <span class="miss">' + missingWords().join(' … ') + '</span>');
+  setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَسْمَعْها صَحيحَةً.') + ' قُلْ: <span class="miss">' + nextWord() + '</span>');
   clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2200);
   if (cur.wrong >= 1) showHint();
   if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
@@ -367,25 +419,21 @@ function onSpeech(alts, final) {
   const text = (alts[0] || '').trim();
   const latin = /[a-z]{2,}/i.test(text);
   if (text) $('heard').textContent = latin ? '' : 'سَمِعْتُ: «' + text + '»';
-  // everything heard since this prompt started, so a sentence split into pieces still counts
-  const sofar = [...cur.finals, text].join(' ');
-  const cands = [sofar, ...alts];
-  let newHit = false, anyHit = false;
-  cur.spec.groups.forEach((g, i) => {
-    const hit = cands.some(a => groupMatch(a, g));
-    if (hit) anyHit = true;
-    if (!cur.sat.has(i) && hit) { cur.sat.add(i); newHit = true; }
-  });
-  dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + (newHit ? ' ✔' : anyHit ? ' ~' : ''));
+  // everything heard since this prompt started, so a sentence read in pieces still counts
+  const before = cur.pos;
+  let best = before;
+  for (const a of [[...cur.finals, text].join(' '), ...alts]) best = Math.max(best, align(tokens(norm(a)), cur.units));
+  cur.pos = best;
+  const newHit = cur.pos > before;
+  dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
   renderLine();
-  if (cur.sat.size === cur.spec.groups.length) return success();
-  if (newHit) { cur.lastHit = performance.now(); S.tick(); clearTimeout(cur.stT); setStatus('part', '✔ أَكْمِلْ: <span class="miss">' + missingWords().join(' … ') + '</span>'); }
+  if (cur.pos >= cur.units.length) return success();
+  if (newHit) { cur.lastHit = performance.now(); S.tick(); clearTimeout(cur.stT); setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>'); }
   if (final && text) {
     cur.finals.push(text); if (cur.finals.length > 4) cur.finals.shift();
-    const words = tokens(norm(text)).length;
-    // buzz only when a piece with real content had nothing correct in it, and not right after a correct word
+    const advanced = cur.pos > cur.lastPos; cur.lastPos = cur.pos;
     const recentHit = performance.now() - cur.lastHit < 2500;
-    if (!anyHit && !recentHit && (words >= 2 || latin)) miss(latin ? 'en' : 'wrong');
+    if (!advanced && !recentHit) miss(latin ? 'en' : 'wrong');
     else if (!newHit) listenStatus();
   }
 }
