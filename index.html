@@ -213,6 +213,7 @@ function numMatch(nt, tk, n) {
 }
 function groupMatch(text, g) {
   const nt = norm(text);
+  if (g.name && nt.includes(norm(g.name))) return true;
   if (g.num) return numMatch(nt, tokens(nt), g.num);
   return g.alts.some(a => nt.includes(a));
 }
@@ -225,18 +226,28 @@ const COLOR_W = { red: ['احمر'], blue: ['ازرق', 'ازرك'] };
 
 // prompt specs: segments [{t, g}] + groups
 const who = p => ({ t: (p.name ? p.name + ' ' : 'اللّاعِبُ ') + 'رَقْمُ ' });
+const PL = p => ({ num: p.num, name: p.name });                       // player: say his name or his number
+const pseg = (p, g, c = 'ُ') => [{ t: p.name ? p.name + ' ' : (c === 'ُ' ? 'اللّاعِبُ ' : c === 'َ' ? 'اللّاعِبَ ' : 'اللّاعِبِ '), g }, { t: 'رَقْم' + c + ' ' }, { t: p.num, g }];
 const P = {
   start: () => ({ segs: [{ t: 'بَدَأَتِ', g: 0 }, { t: ' ' }, { t: 'المُباراةُ', g: 1 }, { t: '!' }], groups: [W_(['بدا', 'بدت']), W_(['مبار'])] }),
   second: () => ({ segs: [{ t: 'بَدَأَ', g: 0 }, { t: ' ' }, { t: 'الشَّوْطُ', g: 1 }, { t: ' الثّاني!' }], groups: [W_(['بدا']), W_(['شوط'])] }),
   half: () => ({ segs: [{ t: 'نِهايَةُ', g: 0 }, { t: ' ' }, { t: 'الشَّوْطِ', g: 1 }, { t: ' الأَوَّلِ!' }], groups: [W_(['نهاي']), W_(['شوط'])] }),
   end: () => ({ segs: [{ t: 'انْتَهَتِ', g: 0 }, { t: ' المُباراةُ!' }], groups: [W_(['انته'])] }),
-  dribble: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُراوِغُ', g: 0 }, { t: '!' }], groups: [W_(['يراوغ', 'راوغ', 'مراوغ', 'يراوق', 'تراوغ']), N_(p.num)], nums: [p.num] }),
-  run: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يَجْري', g: 0 }, { t: ' بِالكُرَةِ!' }], groups: [W_(['يجري', 'جري', 'يركض']), N_(p.num)], nums: [p.num] }),
-  pass: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُمَرِّرُ', g: 0 }, { t: ' الكُرَةَ!' }], groups: [W_(['يمرر', 'مرر', 'تمرير', 'يمر']), N_(p.num)], nums: [p.num] }),
-  passTo: (p, r) => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُمَرِّرُ', g: 0 }, { t: ' إِلى ' + (r.name ? r.name + ' ' : '') + 'رَقْمِ ' }, { t: r.num, g: 2 }, { t: '!' }], groups: [W_(['يمرر', 'مرر', 'تمرير', 'يمر']), N_(p.num), N_(r.num)], nums: [p.num, r.num] }),
-  shoot: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُسَدِّدُ', g: 0 }, { t: '!' }], groups: [W_(['يسدد', 'سدد', 'تسديد', 'يسد']), N_(p.num)], nums: [p.num] }),
+  dribble: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُراوِغُ', g: 0 }, { t: '!' }], groups: [W_(['يراوغ', 'راوغ', 'مراوغ', 'يراوق', 'تراوغ']), PL(p)], nums: [p.num] }),
+  run: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يَرْكُضُ', g: 0 }, { t: ' بِالكُرَةِ!' }], groups: [W_(['يجري', 'جري', 'يركض', 'ركض']), PL(p)], nums: [p.num] }),
+  pass: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُمَرِّرُ', g: 0 }, { t: ' الكُرَةَ!' }], groups: [W_(['يمرر', 'مرر', 'تمرير', 'يمر']), PL(p)], nums: [p.num] }),
+  passTo: (p, r) => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُمَرِّرُ', g: 0 }, { t: ' إِلى ' + (r.name ? r.name + ' ' : '') + 'رَقْمِ ' }, { t: r.num, g: 2 }, { t: '!' }], groups: [W_(['يمرر', 'مرر', 'تمرير', 'يمر']), PL(p), PL(r)], nums: [p.num, r.num] }),
+  shoot: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُسَدِّدُ', g: 0 }, { t: '!' }], groups: [W_(['يسدد', 'سدد', 'تسديد', 'يسد']), PL(p)], nums: [p.num] }),
+  intercept: (o, p) => ({ segs: [...pseg(o, 1), { t: ' ' }, { t: 'يَعْتَرِضُ', g: 0 }, { t: ' ' }, ...pseg(p, 2, 'َ'), { t: '!' }], groups: [W_(['يعترض', 'اعترض', 'يعتر', 'اعتراض']), PL(o), PL(p)], nums: [o.num, p.num] }),
+  steal: (o, p) => ({ segs: [...pseg(o, 1), { t: ' ' }, { t: 'يَنْتَزِعُ', g: 0 }, { t: ' الكُرَةَ مِنْ ' }, ...pseg(p, 2, 'ِ'), { t: '!' }], groups: [W_(['ينتزع', 'انتزع', 'ينتز', 'انتز']), PL(o), PL(p)], nums: [o.num, p.num] }),
+  trip: (o, p) => ({ segs: [...pseg(o, 1), { t: ' ' }, { t: 'يُعَرْقِلُ', g: 0 }, { t: ' ' }, ...pseg(p, 2, 'َ'), { t: '!' }], groups: [W_(['يعرقل', 'عرقل', 'عرقله', 'يعرك']), PL(o), PL(p)], nums: [o.num, p.num] }),
+  wave: r => ({ segs: [...pseg(r, 1), { t: ' ' }, { t: 'يُلَوِّحُ', g: 0 }, { t: ' بِيَدِهِ لِيُمَرِّرَ لَهُ الكُرَةَ!' }], groups: [W_(['يلوح', 'لوح', 'بيده', 'يلو']), PL(r)], nums: [r.num] }),
+  kickHard: p => ({ segs: [...pseg(p, 1), { t: ' ' }, { t: 'يَرْكُلُ', g: 0 }, { t: ' الكُرَةَ ' }, { t: 'بِقُوَّةٍ', g: 2 }, { t: '!' }], groups: [W_(['يركل', 'ركل', 'يركُل']), PL(p), W_(['بقوه', 'بقوة', 'قوه'])], nums: [p.num] }),
+  saveWow: () => ({ segs: [{ t: 'كانَ ' }, { t: 'تَصَدِّياً', g: 0 }, { t: ' ' }, { t: 'بارِعاً', g: 1 }, { t: '!' }], groups: [W_(['تصدي', 'تصد']), W_(['بارع'])] }),
   goal: tm => ({ segs: [{ t: 'هَدَفٌ', g: 0 }, { t: '! هَدَفٌ لِلفَريقِ ' }, { t: COLOR_G[tm], g: 1 }, { t: '!' }], groups: [W_(['هدف']), W_(COLOR_W[tm])] }),
-  save: () => ({ segs: [{ t: 'الحارِسُ', g: 0 }, { t: ' ' }, { t: 'يُمْسِكُ', g: 1 }, { t: ' الكُرَةَ!' }], groups: [W_(['حارس']), W_(['يمسك', 'مسك', 'امسك', 'يصد'])] }),
+  save: () => Math.random() < .5
+    ? { segs: [{ t: 'الحارِسُ', g: 0 }, { t: ' ' }, { t: 'يُمْسِكُ', g: 1 }, { t: ' الكُرَةَ!' }], groups: [W_(['حارس']), W_(['يمسك', 'مسك', 'امسك'])] }
+    : { segs: [{ t: 'تَصَدّى', g: 0 }, { t: ' لَها ' }, { t: 'الحارِسُ', g: 1 }, { t: '!' }], groups: [W_(['تصدى', 'تصدي', 'تصد', 'صدها']), W_(['حارس'])] },
   corner: () => ({ segs: [{ t: 'رَكْلَةٌ ' }, { t: 'رُكْنِيَّةٌ', g: 0 }, { t: '!' }], groups: [W_(['ركني', 'ركنيا'])] }),
   foul: () => ({ segs: [{ t: 'خَطَأٌ', g: 0 }, { t: '! بِطاقَةٌ ' }, { t: 'صَفْراءُ', g: 1 }, { t: '!' }], groups: [W_(['خطا']), W_(['صفرا'])] }),
   attack: tm => ({ segs: [{ t: 'الفَريقُ ' }, { t: COLOR[tm], g: 1 }, { t: ' ' }, { t: 'يُهاجِمُ', g: 0 }, { t: '!' }], groups: [W_(['يهاجم', 'هاجم', 'هجوم', 'تهاجم']), W_(COLOR_W[tm])] })
@@ -468,7 +479,8 @@ function drawPlayer(p) {
   // arms
   [-1, 1].forEach(sd => {
     const sw = Math.sin(ph + (sd > 0 ? 0 : Math.PI)) * 7 * run;
-    const sx = sd * 13, sy = -61, hx = sd * 17 + sw * .4, hy = -42 + Math.abs(sw) * .2;
+    let sx = sd * 13, sy = -61, hx = sd * 17 + sw * .4, hy = -42 + Math.abs(sw) * .2;
+    if (p.waving && sd > 0) { hx = 14 + Math.sin(T * 9) * 9; hy = -92; }
     line(sx, sy, sx + (hx - sx) * .4, sy + (hy - sy) * .4, shirt, 8);
     line(sx + (hx - sx) * .4, sy + (hy - sy) * .4, hx, hy, p.skin, 5);
     ctx.fillStyle = p.gk ? '#16a34a' : p.skin; ctx.beginPath(); ctx.arc(hx, hy, p.gk ? 4.2 : 3, 0, 7); ctx.fill();
@@ -562,7 +574,34 @@ const EV = {
     focusP = p; await ask(e.to ? P.passTo(p, r) : P.pass(p)); focusP = null;
     r.ctrl = true; await kickBall(0, 0, .8, 25, r); r.ctrl = false; giveBall(r);
   },
+  async steal(e) {
+    const p = holder, o = nearestOpp(p), d = DIR[p.team];
+    await moveTo(o, p.x + d * 40, p.y + 4, .6);
+    o.ctrl = true; focusP = o;
+    await ask(e.kind === 'intercept' ? P.intercept(o, p) : P.steal(o, p));
+    focusP = null; o.ctrl = false; giveBall(o);
+    await moveTo(o, fwdX(o, o.x + DIR[o.team] * 120), clamp(o.y + rand(-50, 50), 120, 780), .7);
+  },
+  async wave() {
+    const p = holder, r = receiver(p);
+    const tx = fwdX(r, p.x + DIR[p.team] * 220), ty = clamp(p.y + (p.y > 450 ? -200 : 200), 120, 780);
+    await moveTo(r, tx, ty, 1);
+    r.ctrl = true; r.waving = true; focusP = r;
+    await ask(P.wave(r));
+    focusP = null; r.waving = false;
+    await wait(.2); await kickBall(0, 0, .8, 25, r); r.ctrl = false; giveBall(r);
+  },
   async foul() {
+    const p = holder, o = nearestOpp(p);
+    await moveTo(o, p.x - DIR[p.team] * 26, p.y + 6, .55);
+    o.ctrl = true; p.fallen = true; S.kick(); S.whistle(1); S.cheer(1, .2);
+    focusP = o; await ask(P.trip(o, p)); focusP = null;
+    $('ycard').className = 'show';
+    await ask(P.foul());
+    $('ycard').className = ''; p.fallen = false;
+    await moveTo(o, o.x - DIR[p.team] * 70, o.y + 40, .5);
+  },
+  async foulOld() {
     const p = holder, o = nearestOpp(p);
     await moveTo(o, p.x - DIR[p.team] * 26, p.y + 6, .55);
     o.ctrl = true; p.fallen = true; S.kick(); S.whistle(1); S.cheer(1, .2);
@@ -577,7 +616,7 @@ const EV = {
       const tx = gx - d * 300, ty = clamp(p.y, 320, 580);
       await moveTo(p, tx, ty, clamp(Math.hypot(tx - p.x, ty - p.y) / 420, .5, 2));
     } else await wait(.3);
-    focusP = p; await ask(P.shoot(p)); focusP = null;
+    focusP = p; await ask(e.hard ? P.kickHard(p) : P.shoot(p)); focusP = null;
     const K = keeper(other(tm)); K.ctrl = true;
     if (e.outcome === 'goal') {
       const low = K.y < 450, ty = low ? rand(470, 500) : rand(400, 430);
@@ -589,7 +628,7 @@ const EV = {
       const ty = rand(405, 495);
       moveTo(K, gx - d * 8, ty, .4).then(() => K.ctrl = true);
       await kickBall(gx - d * 22, ty, .45, 15);
-      giveBall(K); S.cheer(1.2, .3);
+      giveBall(K); S.cheer(1.2, .3); K.ctrl = true;
     } else { // corner
       const ty = rand(405, 495), cy = ty < 450 ? 48 : 852;
       moveTo(K, gx - d * 8, ty, .4).then(() => K.ctrl = true);
@@ -609,7 +648,9 @@ const EV = {
   },
   async save() {
     const K = holder; focusP = K;
-    await ask(P.save()); focusP = null;
+    await ask(P.save());
+    if (Math.random() < .5) { S.cheer(1.5, .35); await ask(P.saveWow()); }
+    focusP = null;
     await wait(.3);
     const r = team(K.team).filter(q => !q.gk).sort((a, b) => Math.hypot(a.x - K.x, a.y - K.y) - Math.hypot(b.x - K.x, b.y - K.y))[0];
     r.ctrl = true; await kickBall(0, 0, .9, 60, r); r.ctrl = false; giveBall(r); K.ctrl = false;
@@ -658,14 +699,17 @@ function buildPlan() {
       let k; do { k = pick(['dribble', 'run', 'pass']); } while (k === prev); prev = k;
       moves.push({ k, to: k === 'pass' && c.h === 1 && Math.random() < .6 });
     }
-    if (Math.random() < .22) moves.splice(1 + Math.floor(Math.random() * (moves.length)), 0, { k: 'foul' });
+    const r2 = Math.random();
+    if (r2 < .3) moves.splice(1 + Math.floor(Math.random() * moves.length), 0, { k: 'foul' });
+    else if (r2 < .55) moves.push({ k: 'steal', kind: Math.random() < .5 ? 'intercept' : 'steal' }, { k: 'dribble' });
+    if (Math.random() < .35) moves.splice(Math.max(0, moves.length - 1), 0, { k: 'wave' });
     plan.push(...moves);
     const o = outs[i];
     if (o === 'corner') {
       plan.push({ k: 'shot', outcome: 'corner' }, { k: 'corner' });
       const o2 = Math.random() < .5 ? 'goal' : 'save';
-      plan.push({ k: 'shot', outcome: o2 }, { k: o2 });
-    } else plan.push({ k: 'shot', outcome: o }, { k: o });
+      plan.push({ k: 'shot', outcome: o2, hard: Math.random() < .5 }, { k: o2 });
+    } else plan.push({ k: 'shot', outcome: o, hard: Math.random() < .5 }, { k: o });
   });
   if (CHAINS_PER_HALF * 2 === chainTeams.length && !plan.some(e => e.k === 'halftime')) plan.push({ k: 'halftime' });
   plan.push({ k: 'end' });
