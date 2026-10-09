@@ -277,35 +277,38 @@ async function azInit() {
   try { await azToken(true); ENGINE = 'azure'; micOK = true; micUI(); return true; }
   catch (e) { console.warn('Azure speech unavailable, using Chrome', e); return false; }
 }
-function azStop() {
-  const r = azRec; azRec = null; azFor = null; recRunning = false;
-  if (r) { try { r.stopContinuousRecognitionAsync(() => r.close(), () => r.close()); } catch (e) {} }
-  micUI();
+function azStop() { // keep the recognizer running; just stop listening to it
+  recRunning = !!azRec; micUI();
 }
-async function azStart() {
-  if (!cur || cur.done) return;
-  if (azFor === cur && azRec) return;
-  azStop();
-  const me = cur; azFor = me;
+async function azStart() { if (!azRec) azBoot(); micUI(); }
+async function azBoot() {
+  if (azRec) return;
   let t;
   try { t = await azToken(); }
   catch (e) { console.warn(e); ENGINE = 'chrome'; initRec(); startRec(); micUI(); return; }
-  if (cur !== me || me.done || !accepting) { if (azFor === me) azFor = null; return; }
   const sdk = window.SpeechSDK;
   const cfg = sdk.SpeechConfig.fromAuthorizationToken(t.token, t.region);
   cfg.speechRecognitionLanguage = AZ_LANG;
   cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(DARJ ? GAP : 2500));
   const rec = new sdk.SpeechRecognizer(cfg, sdk.AudioConfig.fromDefaultMicrophoneInput());
   try { const pl = sdk.PhraseListGrammar.fromRecognizer(rec); [...NAMES, ...VERBS].forEach(w => pl.addPhrase(w)); } catch (e) {}
-  rec.recognizing = (s, e) => { if (cur === me) azText(e.result.text, false); };
-  rec.recognized = (s, e) => { if (cur === me && e.result.reason === sdk.ResultReason.RecognizedSpeech) azText(e.result.text, true); };
+  rec.recognizing = (s, e) => azText(e.result.text, false);
+  rec.recognized = (s, e) => { if (e.result.reason === sdk.ResultReason.RecognizedSpeech) azText(e.result.text, true); };
   rec.canceled = (s, e) => {
-    console.warn('Azure canceled', e.errorDetails);
+    console.warn('Azure canceled', e.errorDetails); logEvent('azure-error', String(e.errorDetails || ''));
     if (e.errorDetails && /auth|401|403|token/i.test(e.errorDetails)) azTok = null;
-    if (azRec === rec) { azRec = null; azFor = null; recRunning = false; micUI(); if (cur === me && !me.done && accepting) setTimeout(() => accepting && azStart(), 700); }
+    if (azRec === rec) { azRec = null; recRunning = false; micUI(); try { rec.close(); } catch (x) {} if (running) setTimeout(azBoot, 800); }
   };
   azRec = rec;
   rec.startContinuousRecognitionAsync(() => { recRunning = true; micUI(); }, err => console.warn('Azure start', err));
+  clearInterval(azBoot.refresh);
+  azBoot.refresh = setInterval(async () => { try { const n = await azToken(true); if (azRec) azRec.authorizationToken = n.token; } catch (e) {} }, 8 * 60e3);
+}
+function azShutdown() {
+  clearInterval(azBoot.refresh);
+  const r = azRec; azRec = null; recRunning = false;
+  if (r) { try { r.stopContinuousRecognitionAsync(() => r.close(), () => r.close()); } catch (e) {} }
+  micUI();
 }
 function azText(text, final) {
   if (!cur || cur.done || !accepting || speaking) return;
@@ -317,6 +320,7 @@ function azText(text, final) {
   cur.pos = align(tokens(norm(said)), cur.units);
   renderLine();
   dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
+  if (final || cur.pos >= cur.units.length) logEvent(cur.pos >= cur.units.length ? 'PASS' : 'heard', '«' + text + '» matched ' + cur.pos + '/' + cur.units.length);
   if (cur.pos >= cur.units.length) { cur.fluentAz = DARJ || cur.finals.length === 0; return success(); }
   if (!final) { if (cur.pos > before) { S.tick(); setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>'); } return; }
   cur.finals.push(text);
@@ -423,6 +427,8 @@ function wmatch(tok, key) {
   const a = stripPre(tok), b = stripPre(key);
   if (a === b) return true;
   if (ENGINE !== 'azure' && a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  const loose = w => { while (w.length > 3 && /[اهيوى]$/.test(w)) w = w.slice(0, -1); return w; };
+  if (a.length >= 3 && b.length >= 3 && loose(a) === loose(b)) return true;
   if (ENGINE === 'azure') return false;
   const L = Math.max(a.length, b.length);
   return L >= 3 && 1 - lev(a, b) / L >= 0.67;
@@ -544,6 +550,16 @@ function miss(kind) {
   clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2200);
   if (cur.wrong >= 1) showHint();
   if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
+}
+const LOG = [];
+function logEvent(kind, detail) {
+  const exp = cur ? cur.units.map(u => u.disp).join(' ') : '';
+  LOG.push(new Date().toLocaleTimeString() + ' | ' + kind + ' | expected: ' + exp + (detail ? ' | ' + detail : ''));
+  if (LOG.length > 500) LOG.shift();
+}
+function downloadLog() {
+  const blob = new Blob(['engine: ' + ENGINE + ' | level: ' + (DARJ ? 'darj' : '1') + ' | ' + navigator.userAgent + '\n\n' + LOG.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'wabel-soccer-log.txt'; a.click();
 }
 const dbgLines = [];
 function dbg(cls, txt) { dbgLines.push(`<span class="${cls}">${txt}</span>`); if (dbgLines.length > 14) dbgLines.shift(); $('dbg').innerHTML = dbgLines.join('<br>'); console.log('[SR]', txt); }
@@ -1006,7 +1022,7 @@ async function runChallenge() {
       await wait(.3);
     }
   }
-  setCrowd(0); running = false; challenge = false; stopRec(); $('timer').className = ''; $('clock').style.display = '';
+  setCrowd(0); running = false; challenge = false; stopRec(); azShutdown(); $('timer').className = ''; $('clock').style.display = '';
   const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5 + stat.darj * 10;
   $('chalTitle').textContent = 'انْتَهى الوَقْتُ' + (chalName ? ' يا ' + chalName : '') + '!';
   $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
@@ -1023,7 +1039,7 @@ async function runMatch() {
     await EV[plan[i].k](plan[i]);
     await wait(.3);
   }
-  setCrowd(0); running = false; stopRec();
+  setCrowd(0); running = false; stopRec(); azShutdown();
   $('final').textContent = `${score.red} - ${score.blue}`;
   $('final').innerHTML = `<span style="color:#e63946">${score.red}</span> - <span style="color:#60a5fa">${score.blue}</span>`;
   $('endStars').textContent = '⭐ ' + stars;
@@ -1034,7 +1050,7 @@ async function runMatch() {
 async function prep() {
   initAudio(); if (AC.state === 'suspended') AC.resume();
   try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); } catch (e) { if (SR) micOK = false; }
-  if (!(await azInit())) { initRec(); startRec(); }
+  if (await azInit()) await azBoot(); else { initRec(); startRec(); }
   ['start', 'end', 'pickName', 'chalEnd'].forEach(id => $(id).className = 'screen hidden');
 }
 async function begin() { await prep(); runMatch(); }
@@ -1045,8 +1061,8 @@ function showNames() {
   NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.className = n === chalName ? 'sel' : ''; b.onclick = () => { chalName = n; [...box.children].forEach(c => c.className = c === b ? 'sel' : ''); }; box.appendChild(b); });
   $('pickName').className = 'screen';
 }
-$('lv1').onclick = () => { DARJ = false; $('lv1').className = 'sel'; $('lv2').className = ''; };
-$('lv2').onclick = () => { DARJ = true; $('lv2').className = 'sel'; $('lv1').className = ''; };
+$('lv1').onclick = () => { azShutdown(); DARJ = false; $('lv1').className = 'sel'; $('lv2').className = ''; };
+$('lv2').onclick = () => { azShutdown(); DARJ = true; $('lv2').className = 'sel'; $('lv1').className = ''; };
 $('go').onclick = begin;
 $('again').onclick = begin;
 $('goChal').onclick = showNames;
@@ -1060,8 +1076,9 @@ function togglePause() {
 }
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (k === ' ' || k === 'enter') { e.preventDefault(); if (cur && !paused) success(); }
-  else if (k === 'x' || k === 'backspace') { if (cur && !paused) miss('wrong'); }
+  if (k === ' ' || k === 'enter') { e.preventDefault(); if (cur && !paused) { logEvent('TEACHER-PASS'); success(); } }
+  else if (k === 'l') downloadLog();
+  else if (k === 'x' || k === 'backspace') { if (cur && !paused) { logEvent('TEACHER-FAIL'); miss('wrong'); } }
   else if (k === 'h') { if (cur) { showHint(); speakLine(); } }
   else if (k === 'p') togglePause();
   else if (k === 's') { muted = !muted; if (master) master.gain.value = muted ? 0 : .9; }
