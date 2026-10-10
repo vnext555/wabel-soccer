@@ -74,6 +74,28 @@
   #result b { font-family: 'Cairo', sans-serif; font-size: calc(var(--u)*3.2); color: #ffd166; direction: ltr; }
   #result .total { grid-column: 1 / -1; text-align: center; font-size: calc(var(--u)*4); margin-top: calc(var(--u)*.6); }
   #result .total b { font-size: calc(var(--u)*6); }
+  #board, #board2 { width: min(70%, calc(var(--u)*60)); border-collapse: collapse; font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.2); background: rgba(0,0,0,.35); border-radius: calc(var(--u)*1); overflow: hidden; }
+  #board th, #board td, #board2 th, #board2 td { padding: calc(var(--u)*.35) calc(var(--u)*1); text-align: center; }
+  #board th, #board2 th { background: rgba(255,209,102,.2); color: #ffd166; font-weight: 700; }
+  #board td.n, #board2 td.n { text-align: right; font-weight: 700; }
+  #board tr.first td, #board2 tr.first td { color: #ffd166; } #board tr.me td { background: rgba(56,189,248,.18); }
+  #board td.s, #board2 td.s { font-family: 'Cairo', sans-serif; font-weight: 800; direction: ltr; }
+  .btn.gold { background: linear-gradient(180deg, #ffe08a, #f5b400); box-shadow: 0 6px 0 #a67c00; }
+  .btn.gold:active { box-shadow: 0 2px 0 #a67c00; }
+  #winner.screen { gap: calc(var(--u)*.8); }
+  #winner h1 { font-size: calc(var(--u)*5); }
+  #board2 { font-size: calc(var(--u)*1.9); } #board2 th, #board2 td { padding: calc(var(--u)*.2) calc(var(--u)*1); }
+  #chalEnd.screen { gap: calc(var(--u)*.8); } #chalEnd h1 { font-size: calc(var(--u)*5); }
+  #chalEnd #result { font-size: calc(var(--u)*2.3); gap: calc(var(--u)*.2) calc(var(--u)*3); } #chalEnd #result b { font-size: calc(var(--u)*2.6); } #chalEnd #result .total { font-size: calc(var(--u)*3.2); margin-top: 0; } #chalEnd #result .total b { font-size: calc(var(--u)*4.5); }
+  #chalEnd #board { font-size: calc(var(--u)*1.9); } #chalEnd #board th, #chalEnd #board td { padding: calc(var(--u)*.2) calc(var(--u)*1); }
+  #podium { display: flex; align-items: flex-end; gap: calc(var(--u)*1.5); margin-top: calc(var(--u)*1); direction: ltr; }
+  .step { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: calc(var(--u)*16); border-radius: calc(var(--u)*1) calc(var(--u)*1) 0 0; color: #111; font-family: 'Noto Naskh Arabic', serif; font-weight: 700; padding-bottom: calc(var(--u)*.6); }
+  .step .nm { font-size: calc(var(--u)*3); color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.6); margin-bottom: calc(var(--u)*.4); }
+  .step .sc { font-family: 'Cairo', sans-serif; font-size: calc(var(--u)*2.6); }
+  .step.p1 { height: calc(var(--u)*14); background: #ffd166; } .step.p2 { height: calc(var(--u)*10); background: #cbd5e1; } .step.p3 { height: calc(var(--u)*8); background: #d9a066; }
+  .step .medal { font-size: calc(var(--u)*4); line-height: 1; margin-bottom: calc(var(--u)*.4); }
+  #winName { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*7); font-weight: 700; color: #ffd166; line-height: 1.3; animation: pop .6s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
   #bubble { position: absolute; top: calc(var(--u)*-3.6); left: 50%; transform: translateX(-50%) scale(0); background: #ffd166; color: #111; font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*2.4); padding: calc(var(--u)*.2) calc(var(--u)*1.6); border-radius: calc(var(--u)*2); white-space: nowrap; transition: transform .2s; }
   #bubble.show { transform: translateX(-50%) scale(1); }
   #bubble.bad { background: #ef4444; color: #fff; }
@@ -138,9 +160,22 @@
     <div class="brand">وابِل</div>
     <h1 id="chalTitle">انْتَهى الوَقْتُ!</h1>
     <div id="result"></div>
+    <table id="board"></table>
     <div class="modes">
-      <button class="btn alt" id="chalAgain">تَحَدٍّ جَديدٌ</button>
+      <button class="btn alt" id="chalAgain">تَحَدٍّ جَديدٌ (طالِبٌ آخَرُ)</button>
+      <button class="btn gold" id="chalWin">🏆 إِعْلانُ الفائِزِ</button>
       <button class="btn" id="chalHome">القائِمَةُ</button>
+    </div>
+  </div>
+  <div id="winner" class="screen hidden">
+    <div class="brand">وابِل</div>
+    <h1>🏆 الفائِزُ هُوَ</h1>
+    <div id="winName"></div>
+    <div id="podium"></div>
+    <table id="board2"></table>
+    <div class="modes">
+      <button class="btn alt" id="winAgain">تَحَدٍّ جَديدٌ</button>
+      <button class="btn" id="winReset">مُسابَقَةٌ جَديدَةٌ (مَسْحُ النَّتائِجِ)</button>
     </div>
   </div>
   <div id="end" class="screen hidden">
@@ -1026,6 +1061,8 @@ async function runChallenge() {
   }
   setCrowd(0); running = false; challenge = false; stopRec(); azShutdown(); $('timer').className = ''; $('clock').style.display = '';
   const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5 + stat.darj * 10;
+  BOARD.push({ name: chalName || ('لاعب ' + (BOARD.length + 1)), goals: stat.goals, lines: stat.lines, darj: stat.darj, wrong: stat.wrong, total });
+  renderBoard($('board'), BOARD.length - 1);
   $('chalTitle').textContent = 'انْتَهى الوَقْتُ' + (chalName ? ' يا ' + chalName : '') + '!';
   $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
   $('chalEnd').className = 'screen';
@@ -1053,12 +1090,12 @@ async function prep() {
   initAudio(); if (AC.state === 'suspended') AC.resume();
   try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); } catch (e) { if (SR) micOK = false; }
   if (await azInit()) await azBoot(); else { initRec(); startRec(); }
-  ['start', 'end', 'pickName', 'chalEnd'].forEach(id => $(id).className = 'screen hidden');
+  ['start', 'end', 'pickName', 'chalEnd', 'winner'].forEach(id => $(id).className = 'screen hidden');
 }
 async function begin() { await prep(); runMatch(); }
 async function beginChal() { await prep(); runChallenge(); }
 function showNames() {
-  ['start', 'end', 'chalEnd'].forEach(id => $(id).className = 'screen hidden');
+  ['start', 'end', 'chalEnd', 'winner'].forEach(id => $(id).className = 'screen hidden');
   const box = $('nameBtns'); box.innerHTML = '';
   NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.className = n === chalName ? 'sel' : ''; b.onclick = () => { chalName = n; [...box.children].forEach(c => c.className = c === b ? 'sel' : ''); }; box.appendChild(b); });
   $('pickName').className = 'screen';
@@ -1070,6 +1107,28 @@ $('again').onclick = begin;
 $('goChal').onclick = showNames;
 $('goChal2').onclick = beginChal;
 $('chalAgain').onclick = showNames;
+const BOARD = [];   // every challenge played this session
+function ranked() { return [...BOARD].sort((a, b) => b.total - a.total || b.goals - a.goals || a.wrong - b.wrong); }
+function renderBoard(el, meIdx) {
+  const r = ranked(); const me = BOARD[meIdx];
+  el.innerHTML = '<tr><th>#</th><th>الاسْمُ</th><th>⚽</th><th>✔</th><th>🌟</th><th>✘</th><th>النَّتيجَةُ</th></tr>' +
+    r.map((x, i) => `<tr class="${i === 0 ? 'first' : ''} ${x === me ? 'me' : ''}"><td>${i + 1}</td><td class="n">${x.name}</td><td>${x.goals}</td><td>${x.lines}</td><td>${x.darj}</td><td>${x.wrong}</td><td class="s">${x.total}</td></tr>`).join('');
+}
+function announceWinner() {
+  if (!BOARD.length) return;
+  const r = ranked();
+  $('chalEnd').className = 'screen hidden'; $('winner').className = 'screen';
+  $('winName').textContent = r[0].name + ' 🎉';
+  const order = [r[1], r[0], r[2]].filter(Boolean), cls = { 0: 'p1', 1: 'p2', 2: 'p3' }, medal = ['🥇', '🥈', '🥉'];
+  $('podium').innerHTML = order.map(x => { const i = r.indexOf(x); return `<div class="step ${cls[i]}"><div class="nm">${x.name}</div><div class="medal">${medal[i]}</div><div class="sc">${x.total}</div></div>`; }).join('');
+  renderBoard($('board2'), BOARD.indexOf(r[0]));
+  initAudio(); S.horn(); S.cheer(4, .6); setTimeout(() => S.whistle(3), 1200);
+  confetti(W * .5, H * .35, '#ffd166'); setTimeout(() => confetti(W * .3, H * .3, '#e63946'), 500); setTimeout(() => confetti(W * .7, H * .3, '#1d6fd8'), 1000);
+  if ('speechSynthesis' in window) { const v = speechSynthesis.getVoices().find(v => /^ar/i.test(v.lang)); if (v) { const u = new SpeechSynthesisUtterance('الفائز هو ' + r[0].name + '. مبروك!'); u.voice = v; u.lang = v.lang; speechSynthesis.cancel(); setTimeout(() => speechSynthesis.speak(u), 1500); } }
+}
+$('chalWin').onclick = announceWinner;
+$('winAgain').onclick = () => { $('winner').className = 'screen hidden'; showNames(); };
+$('winReset').onclick = () => { BOARD.length = 0; $('winner').className = 'screen hidden'; $('start').className = 'screen'; };
 $('chalHome').onclick = () => { $('chalEnd').className = 'screen hidden'; $('start').className = 'screen'; };
 function togglePause() {
   if (!running) return;
