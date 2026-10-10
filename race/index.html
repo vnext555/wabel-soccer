@@ -317,7 +317,7 @@ requestAnimationFrame(frame);
 
 // ---------------- flow: name → car → race → result ----------------
 const board = JSON.parse(localStorage.getItem('wabel-race-board') || '[]');
-NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { driver = n; $('who').textContent = n; $('s-name').classList.add('hidden'); $('s-car').classList.remove('hidden'); initAudio(); }; $('names').appendChild(b); });
+NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { driver = n; $('who').textContent = n; $('s-name').classList.add('hidden'); $('s-car').classList.remove('hidden'); initAudio(); if (ENGINE === 'chrome') azInit(); }; $('names').appendChild(b); });
 CARS.forEach(c => { const b = document.createElement('button'); b.className = 'carbtn'; const cc = document.createElement('img'); cc.src = c.img; b.appendChild(cc); const l = document.createElement('div'); l.textContent = c.name; b.appendChild(l); b.onclick = () => { car = c; [...$('cars').children].forEach(x => x.classList.remove('sel')); b.classList.add('sel'); $('go').disabled = false; }; $('cars').appendChild(b); });
 $('go').onclick = start;
 $('again').onclick = () => { $('s-result').classList.add('hidden'); $('s-name').classList.remove('hidden'); };
@@ -329,6 +329,7 @@ async function start() {
   if (ENGINE === 'chrome' && !(await azInit())) { initRec(); }
   $('card').className = ''; $('line').textContent = 'استعدّ…'; setStatus('prep', '٣ … ٢ … ١');
   await new Promise(r => setTimeout(r, 1500));
+  tLeft = SECS; $('timer').textContent = AR(Math.floor(SECS / 60)) + ':' + AR(String(SECS % 60).padStart(2, '0'));
   clearInterval(timerI); timerI = setInterval(() => { tLeft--; const t = $('timer'); t.textContent = AR(Math.floor(tLeft / 60)) + ':' + AR(String(tLeft % 60).padStart(2, '0')); t.className = 'pill' + (tLeft <= 20 ? ' low' : ''); if (tLeft <= 0) { clearInterval(timerI); timeUp = true; if (cur && !cur.done) { cur.done = true; listen(false); finish(); } } }, 1000);
   ask();
 }
