@@ -590,7 +590,6 @@ function miss(kind) {
   else setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَسْمَعْها صَحيحَةً.') + ' قُلْ: <span class="miss">' + nextWord() + '</span>');
   clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2200);
   if (cur.wrong >= 1) showHint();
-  if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
 }
 const LOG = [];
 function logEvent(kind, detail) {
