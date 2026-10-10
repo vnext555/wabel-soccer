@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>سبّاق القراءة — وابِل</title>
+<style>
+:root{--teal:#0E6E72;--navy:#0b2e47;--gold:#c9a227;--red:#D7263D;--green:#2E9E6B;--ink:#1f2a2a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#07131d;font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",Arial,sans-serif;color:#fff;direction:rtl;overflow:hidden}
+#stage{position:relative;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center}
+#world{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;background:#000}
+#c{position:absolute;left:0;top:0;width:100%;height:100%;background:transparent}
+#view{position:relative;overflow:hidden;background:#000;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+#fade{position:absolute;inset:0;background:#000;opacity:0;transition:opacity .5s;pointer-events:none}
+#ui{position:absolute;inset:0;pointer-events:none}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:linear-gradient(180deg,#0b2e47,#07131d);pointer-events:auto}
+.screen.hidden{display:none}
+h1{font-size:64px;margin:0;color:#fff}
+h1 span{color:#4FD1C5;font-size:40px;margin-right:14px}
+h2{font-size:36px;margin:0;color:#ffd166}
+.names,.cars{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;max-width:1100px}
+.names button{font-size:32px;padding:14px 34px;border-radius:14px;border:3px solid #4FD1C5;background:#0E6E72;color:#fff;cursor:pointer;font-family:inherit}
+.names button:hover,.names button.sel{background:#ffd166;color:#07131d;border-color:#ffd166}
+.carbtn{width:260px;height:190px;border-radius:18px;border:3px solid #335;background:#102a3f;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:10px;font-family:inherit;color:#fff;font-size:26px;gap:6px}
+.carbtn img{height:120px;object-fit:contain;filter:drop-shadow(0 8px 10px rgba(0,0,0,.6))}
+.carbtn:hover,.carbtn.sel{border-color:#ffd166;background:#1a3f5c}
+.go{font-size:40px;padding:16px 60px;border-radius:16px;border:0;background:#ffd166;color:#07131d;font-weight:800;cursor:pointer;font-family:inherit}
+.go:disabled{opacity:.4;cursor:default}
+#hud{position:absolute;top:14px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 26px;pointer-events:none}
+.pill{background:rgba(7,19,29,.75);border:2px solid rgba(255,255,255,.25);border-radius:14px;padding:8px 20px;font-size:30px;font-weight:700}
+.pill b{color:#ffd166}
+#timer.low{color:#ff6b6b}
+#card{position:absolute;left:50%;transform:translateX(-50%);top:78px;width:min(1240px,92vw);background:rgba(255,255,255,.96);color:var(--ink);border-radius:22px;padding:18px 28px 14px;box-shadow:0 12px 40px rgba(0,0,0,.45);pointer-events:none;border:6px solid #fff}
+#card.hidden{display:none}
+#card.good{border-color:var(--green)}
+#card.bad{border-color:var(--red);animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(-50%)}25%{transform:translateX(calc(-50% + 12px))}75%{transform:translateX(calc(-50% - 12px))}}
+#line{font-size:44px;font-weight:800;line-height:1.7;text-align:center}
+#line .kw{padding:0 6px;border-radius:10px}
+#line .ok{color:var(--green)}
+#line .next{background:#fff3c4;box-shadow:0 0 0 3px #ffd166}
+#line .miss{color:var(--red);text-decoration:underline}
+#status{font-size:26px;text-align:center;margin-top:6px;min-height:36px;color:#444}
+#status.listen{color:var(--teal)} #status.bad{color:var(--red);font-weight:700} #status.ok{color:var(--green);font-weight:700} #status.prep{color:#8a6d1a}
+#heard{font-size:20px;color:#888;text-align:center;min-height:26px}
+#mic{position:absolute;top:80px;left:26px;font-size:40px;opacity:.9}
+#mic.on{filter:drop-shadow(0 0 10px #4FD1C5)} #mic.off{opacity:.4}
+#result{gap:14px}
+table{border-collapse:collapse;font-size:30px;min-width:760px;background:rgba(255,255,255,.06);border-radius:14px;overflow:hidden}
+th,td{padding:10px 24px;text-align:right}
+th{background:#0E6E72;color:#fff}
+tr:nth-child(even) td{background:rgba(255,255,255,.05)}
+td.m{color:#ffd166;font-weight:800;font-size:36px}
+.big{font-size:120px;font-weight:900;color:#ffd166;line-height:1;margin:0}
+.sub{font-size:28px;color:#cfe}
+#banner{position:absolute;top:360px;left:50%;transform:translateX(-50%);font-size:60px;font-weight:900;color:#fff;text-shadow:0 4px 18px rgba(0,0,0,.6);opacity:0;transition:opacity .25s;pointer-events:none}
+#banner.show{opacity:1}
+#banner.bad{color:#ff6b6b} #banner.good{color:#9ef0b0}
+.small{font-size:20px;color:#9fb3c8}
+.row{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+</style>
+</head>
+<body>
+<div id="stage">
+<div id="view"><video id="world" muted playsinline preload="auto" loop></video><canvas id="c" width="1600" height="900"></canvas><div id="fade"></div></div>
+<div id="ui">
+  <div id="hud" class="hidden">
+    <div class="pill" id="timer">٣:٠٠</div>
+    <div class="pill">🚗 <span id="who"></span></div>
+    <div class="pill">📏 <b id="odo">٠٫٠</b> ميل</div>
+  </div>
+  <div id="mic" class="off">🎤</div>
+  <div id="banner"></div>
+  <div id="card" class="hidden"><div id="line"></div><div id="status"></div><div id="heard"></div></div>
+
+  <div id="s-name" class="screen">
+    <h1>سبّاق القراءة <span>وابِل</span></h1>
+    <h2>مَن السّائق؟</h2>
+    <div class="names" id="names"></div>
+    <div class="small">اقرأ الجملة كاملةً وبطلاقةٍ لتنطلق السيّارة · ٣ دقائق · كم ميلًا تقطع؟</div>
+  </div>
+  <div id="s-car" class="screen hidden">
+    <h2>اختر سيّارتك</h2>
+    <div class="cars" id="cars"></div>
+    <button class="go" id="go" disabled>انطلق! 🏁</button>
+  </div>
+  <div id="s-result" class="screen hidden">
+    <h2 id="r-name"></h2>
+    <div class="big" id="r-miles">٠</div>
+    <div class="sub">ميلًا 🏁</div>
+    <div class="sub" id="r-stats"></div>
+    <table id="board"><thead><tr><th>#</th><th>السّائق</th><th>الأميال</th><th>الجمل</th><th>درج</th></tr></thead><tbody></tbody></table>
+    <div class="row"><button class="go" id="again">سائق آخر</button><button class="go" id="retry" style="background:#4FD1C5">نفس السائق مرّة أخرى</button></div>
+  </div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@1/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const W = 1600, H = 900;
+const cv = $('c'), ctx = cv.getContext('2d');
+const view = $('view');
+function fit() { const k = Math.min(innerWidth / W, innerHeight / H); view.style.width = W * k + 'px'; view.style.height = H * k + 'px'; }
+addEventListener('resize', fit); fit();
+const AR = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]).replace('.', '٫');
+const SECS = Math.max(30, +params.get('secs') || 180);
+const NAMES = (params.get('names') || 'آدم,خالد,وليد,ماهر,براء,عمر,جاد الدين').split(/[,،]/).map(x => x.trim()).filter(Boolean);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+// ---------------- sentences (3 tiers; harder as the miles add up) ----------------
+const BANK = {
+  1: ['فُروضُ الوُضوءِ سِتَّة.', 'مَحَلُّ النِّيَّةِ القَلبُ.', 'الوَجهُ قَبلَ اليَدَينِ.', 'أَمسَحُ رَأسي بِيَدي.', 'أَغسِلُ رِجلَيَّ مَعَ الكَعبَينِ.',
+      'خَرَجَ عُمَرُ مِنَ البَيتِ.', 'ذَهَبَت لَيلى إِلى المَدرَسَةِ.', 'الأَرنَبُ في الصُّندوقِ.', 'وَضَعَ خالِدٌ الكِتابَ عَلى الطّاوِلَةِ.', 'هذا الكِتابُ لِلمُعَلِّمِ.'],
+  2: ['غَسلُ اليَدَينِ مَعَ المِرفَقَينِ فَرضٌ.', 'مَسحُ بَشَرَةِ الرَّأسِ وَلَو شَعرَةً واحِدَةً.', 'النِّيَّةُ رَفعُ الحَدَثِ أَو أَداءُ فَرضِ الوُضوءِ.', 'يَجِبُ غَسلُ الشّارِبِ وَاللِّحيَةِ الخَفيفَةِ.',
+      'تَكتُبُ سَلمى الدَّرسَ بِالقَلَمِ.', 'سافَرَ جَدّي إِلى مَكَّةَ في الصَّيفِ.', 'ابتَعَدَ القِطُّ عَنِ الكَلبِ الكَبيرِ.', 'يَسبَحُ السَّمَكُ في الماءِ البارِدِ.', 'سَأَلَ المُعَلِّمُ التَّلاميذَ عَنِ الدَّرسِ.'],
+  3: ['حَدُّ الوَجهِ طولًا مِن مَنبَتِ الشَّعرِ إِلى مُنتَهى اللَّحيَينِ.', 'الوَجهُ ثُمَّ اليَدانِ ثُمَّ مَسحُ الرَّأسِ وَآخِرًا غَسلُ الرِّجلَينِ.', 'يَجِبُ أَن تَقتَرِنَ النِّيَّةُ بِغَسلِ أَوَّلِ الوَجهِ.',
+      'نَزَلَ يوسُفُ مِنَ الحافِلَةِ وَمَشى عَلى الطَّريقِ إِلى الحَديقَةِ.', 'أَخرَجَ يوسُفُ مِن حَقيبَتِهِ كِتابًا عَنِ الطُّيورِ وَقَرَأَ بِصَوتٍ هادِئٍ.', 'جَلَسَ العُصفورُ عَلى الشَّجَرَةِ وَغَنّى في الصَّباحِ.']
+};
+function tierFor(miles) { return miles < 3 ? 1 : miles < 7 ? 2 : 3; }
+let used = new Set();
+function nextSentence(miles) {
+  const t = tierFor(miles); let pool = BANK[t].filter(s => !used.has(s));
+  if (!pool.length) { BANK[t].forEach(s => used.delete(s)); pool = BANK[t]; }
+  const s = pick(pool); used.add(s); return { text: s, tier: t };
+}
+
+// ---------------- sounds ----------------
+let AC, engG, engO, engF;
+function initAudio() {
+  if (AC) return; AC = new (window.AudioContext || window.webkitAudioContext)();
+  engO = AC.createOscillator(); engO.type = 'sawtooth'; engO.frequency.value = 60;
+  engF = AC.createBiquadFilter(); engF.type = 'lowpass'; engF.frequency.value = 300;
+  engG = AC.createGain(); engG.gain.value = 0;
+  engO.connect(engF); engF.connect(engG); engG.connect(AC.destination); engO.start();
+}
+function engine(speed) { if (!AC) return; engO.frequency.setTargetAtTime(55 + speed * 160, AC.currentTime, .1); engG.gain.setTargetAtTime(speed > .02 ? .06 + speed * .08 : .015, AC.currentTime, .1); }
+function tone(type, f, dur, peak, slide) { if (!AC) return; const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.value = f; if (slide) o.frequency.exponentialRampToValueAtTime(slide, AC.currentTime + dur); g.gain.setValueAtTime(0, AC.currentTime); g.gain.linearRampToValueAtTime(peak, AC.currentTime + .02); g.gain.linearRampToValueAtTime(0, AC.currentTime + dur); o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + dur + .05); }
+const S = {
+  tick: () => tone('square', 880, .08, .05),
+  ding: () => { tone('sine', 660, .15, .15); setTimeout(() => tone('sine', 990, .25, .15), 120); },
+  nitro: () => { tone('sawtooth', 200, .6, .12, 900); },
+  screech: () => { if (!AC) return; const b = AC.createBuffer(1, AC.sampleRate * .5, AC.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length); const s = AC.createBufferSource(); s.buffer = b; const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 2; const g = AC.createGain(); g.gain.value = .25; s.connect(f); f.connect(g); g.connect(AC.destination); s.start(); },
+  buzz: () => tone('square', 140, .3, .12),
+};
+
+// ---------------- speech: Azure (preferred) → Chrome ----------------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, micOK = !!SR, accepting = false, recRunning = false, recWanted = false;
+let ENGINE = 'chrome', azTok = null, azTokAt = 0, azRec = null;
+const TOKEN_URL = params.get('token') || 'https://wabel-token-14522.azurewebsites.net/api/token';
+const AZ_LANG = params.get('alang') || 'ar-SA', LANG = params.get('lang') || 'ar-SA';
+const GAP = +params.get('gap') || 1000;
+function micUI() { const m = $('mic'); m.className = !micOK ? 'off' : (recRunning && accepting ? 'on' : ''); m.title = ENGINE; }
+function initRec() {
+  if (!SR || rec) { micUI(); return; }
+  rec = new SR(); rec.lang = LANG; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
+  rec.onstart = () => { recRunning = true; micUI(); };
+  rec.onend = () => { recRunning = false; micUI(); if (recWanted && micOK) setTimeout(() => { if (recWanted && !recRunning) try { rec.start(); } catch (e) {} }, 150); };
+  rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { micOK = false; recWanted = false; micUI(); } };
+  rec.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; const alts = []; for (let j = 0; j < r.length; j++) alts.push(r[j].transcript); onSpeech(alts, r.isFinal); } };
+  micUI();
+}
+function startRec() { recWanted = true; if (rec && micOK && !recRunning) { try { rec.start(); } catch (e) {} } }
+function listen(on) { accepting = on; if (ENGINE === 'azure') { if (on && !azRec) azBoot(); micUI(); return; } if (on) startRec(); micUI(); }
+async function azToken(force) { if (!force && azTok && Date.now() - azTokAt < 8 * 60e3) return azTok; const r = await fetch(TOKEN_URL, { cache: 'no-store' }); if (!r.ok) throw new Error('token ' + r.status); azTok = await r.json(); azTokAt = Date.now(); return azTok; }
+async function azInit() { if (!window.SpeechSDK || params.get('engine') === 'chrome') return false; try { await azToken(true); ENGINE = 'azure'; micOK = true; micUI(); return true; } catch (e) { console.warn('Azure unavailable', e); return false; } }
+async function azBoot() {
+  if (azRec) return; let t;
+  try { t = await azToken(); } catch (e) { ENGINE = 'chrome'; initRec(); startRec(); micUI(); return; }
+  const sdk = window.SpeechSDK, cfg = sdk.SpeechConfig.fromAuthorizationToken(t.token, t.region);
+  cfg.speechRecognitionLanguage = AZ_LANG; cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(GAP));
+  const r = new sdk.SpeechRecognizer(cfg, sdk.AudioConfig.fromDefaultMicrophoneInput());
+  try { const pl = sdk.PhraseListGrammar.fromRecognizer(r); const ws = new Set(); Object.values(BANK).flat().forEach(s => s.replace(/[ً-ْ]/g, '').split(/\s+/).forEach(w => ws.add(w.replace(/[.،!؟]/g, '')))); [...ws, ...NAMES].forEach(w => pl.addPhrase(w)); } catch (e) {}
+  r.recognizing = (s, e) => azText(e.result.text, false);
+  r.recognized = (s, e) => { if (e.result.reason === sdk.ResultReason.RecognizedSpeech) azText(e.result.text, true); };
+  r.canceled = (s, e) => { if (e.errorDetails && /auth|401|403|token/i.test(e.errorDetails)) azTok = null; if (azRec === r) { azRec = null; recRunning = false; micUI(); try { r.close(); } catch (x) {} if (running) setTimeout(azBoot, 800); } };
+  azRec = r; r.startContinuousRecognitionAsync(() => { recRunning = true; micUI(); }, err => console.warn(err));
+  clearInterval(azBoot.refresh); azBoot.refresh = setInterval(async () => { try { const n = await azToken(true); if (azRec) azRec.authorizationToken = n.token; } catch (e) {} }, 8 * 60e3);
+}
+function azShutdown() { clearInterval(azBoot.refresh); const r = azRec; azRec = null; recRunning = false; if (r) { try { r.stopContinuousRecognitionAsync(() => r.close(), () => r.close()); } catch (e) {} } micUI(); }
+
+// ---------------- Arabic matching (same rules as the soccer game: every word, in order) ----------------
+function norm(s) { return s.replace(/[ً-ٰٟـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/ء/g, '').toLowerCase(); }
+const tokens = nt => nt.split(/[^ء-يa-z0-9]+/).filter(Boolean);
+const stripPre = t => t.replace(/^(و|ف)?(ال)?/, '');
+function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n) return m; let prev = Array.from({ length: n + 1 }, (_, j) => j); for (let i = 1; i <= m; i++) { const row = [i]; for (let j = 1; j <= n; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = row; } return prev[n]; }
+function wmatch(tok, key) {
+  if (!tok || !key) return false; if (tok === key) return true;
+  const a = stripPre(tok), b = stripPre(key); if (a === b) return true;
+  if (ENGINE !== 'azure' && a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  const loose = w => { while (w.length > 3 && /[اهيوى]$/.test(w)) w = w.slice(0, -1); return w; };
+  if (a.length >= 3 && b.length >= 3 && loose(a) === loose(b)) return true;
+  if (ENGINE === 'azure') return false;
+  const L = Math.max(a.length, b.length); return L >= 3 && 1 - lev(a, b) / L >= 0.67;
+}
+function compile(text) { return text.split(/\s+/).map(w => ({ disp: w, key: norm(w.replace(/[!،؟.:]/g, '')) })).filter(u => u.key); }
+function align(toks, units) { let pos = 0; for (const tok of toks) { if (pos >= units.length) break; if (wmatch(tok, units[pos].key)) pos++; } return pos; }
+
+// ---------------- reading loop ----------------
+let cur = null, running = false, timeUp = false, driver = '', car = null;
+let miles = 0, stat = { lines: 0, darj: 0, wrong: 0 };
+function setStatus(cls, html) { const e = $('status'); e.className = cls; e.innerHTML = html; }
+function renderLine() {
+  const el = $('line'); el.innerHTML = '';
+  cur.units.forEach((u, i) => { const sp = document.createElement('span'); sp.textContent = u.disp; sp.className = 'kw' + (i < cur.pos ? ' ok' : i === cur.pos ? ' next' : '') + (cur.badAt === i ? ' miss' : ''); el.appendChild(sp); el.appendChild(document.createTextNode(' ')); });
+}
+function banner(txt, cls) { const b = $('banner'); b.textContent = txt; b.className = 'show ' + (cls || ''); clearTimeout(banner.t); banner.t = setTimeout(() => b.className = '', 1500); }
+function ask() {
+  const s = nextSentence(miles);
+  cur = { text: s.text, tier: s.tier, units: compile(s.text), pos: 0, finals: [], done: false, t0: 0, badAt: -1, wrong: 0 };
+  renderLine(); $('heard').textContent = ''; $('card').className = '';
+  setStatus('prep', '👀 اقرأها في سِرِّك… استعدّ');
+  const me = cur; setTimeout(() => { if (cur !== me || me.done || timeUp) return; S.tick(); listen(true); setStatus('listen', '🎤 اقرأها كاملةً درجًا… والسيّارة تنطلق!'); }, 1800);
+}
+function azText(text, final) {
+  if (!cur || cur.done || !accepting) return; text = (text || '').trim(); if (!text) return;
+  $('heard').textContent = 'سَمِعتُ: «' + text + '»';
+  const before = cur.pos; cur.pos = align(tokens(norm(text)), cur.units); if (cur.pos > before && !cur.t0) cur.t0 = performance.now();
+  renderLine();
+  if (cur.pos >= cur.units.length) return success(true);
+  if (!final) { if (cur.pos > before) { S.tick(); rev = Math.min(1, cur.pos / cur.units.length); } return; }
+  const got = cur.pos, nTok = tokens(norm(text)).length;
+  cur.pos = 0; rev = 0;
+  if (/[a-z]{2,}/i.test(text)) miss('en'); else if (got > 0 && nTok <= got) miss('stop'); else { cur.badAt = got; miss('word'); }
+}
+function onSpeech(alts, final) { // Chrome engine: progressive, sentence may arrive in pieces
+  if (!cur || cur.done || !accepting || !micOK) return;
+  const text = (alts[0] || '').trim(); if (text) $('heard').textContent = 'سَمِعتُ: «' + text + '»';
+  const before = cur.pos; let best = before;
+  for (const a of [[...cur.finals, text].join(' '), ...alts]) best = Math.max(best, align(tokens(norm(a)), cur.units));
+  cur.pos = best; if (cur.pos > before && !cur.t0) cur.t0 = performance.now();
+  renderLine(); rev = Math.min(1, cur.pos / cur.units.length);
+  if (cur.pos >= cur.units.length) { const secs = (performance.now() - cur.t0) / 1000; return success(secs <= 2 + 0.9 * cur.units.length); }
+  if (cur.pos > before) { S.tick(); setStatus('listen', 'أكمِل من: <b>' + cur.units[cur.pos].disp + '</b>'); }
+  if (final) { if (cur.pos === before) miss(/[a-z]{2,}/i.test(text) ? 'en' : 'word'); cur.finals.push(text); }
+}
+function miss(kind) {
+  if (!cur || cur.done) return; cur.wrong++; stat.wrong++; renderLine();
+  S.screech(); braking = 1; rev = 0;
+  const c = $('card'); c.className = ''; void c.offsetWidth; c.className = 'bad';
+  banner(kind === 'en' ? 'بالعربيّة!' : kind === 'stop' ? 'توقّفت!' : 'كلمة غير صحيحة', 'bad');
+  if (kind === 'word' && cur.badAt >= 0) setStatus('bad', '✘ انتبه إلى: <b>' + cur.units[cur.badAt].disp + '</b> — اقرأ الجملة من البداية');
+  else if (kind === 'stop') setStatus('bad', '⏸ توقّفت قبل النهاية! اقرأها كاملةً درجًا من البداية');
+  else setStatus('bad', '✘ لم أسمعها صحيحةً — من البداية');
+  clearTimeout(cur.stT); cur.stT = setTimeout(() => { if (cur && !cur.done) { cur.badAt = -1; renderLine(); setStatus('listen', '🎤 مرّةً أخرى… كاملةً بلا توقّف'); } }, 2200);
+}
+function success(fluent) {
+  if (!cur || cur.done) return; cur.done = true; listen(false); cur.pos = cur.units.length; cur.badAt = -1; renderLine();
+  const words = cur.units.length, dist = +(words * 0.25 * (fluent ? 1.5 : 1)).toFixed(2);
+  stat.lines++; if (fluent) stat.darj++;
+  S.ding(); if (fluent) S.nitro();
+  $('card').className = 'good'; setStatus('ok', (fluent ? '🌟 درجٌ ممتاز! نيترو +' : '✔ صحيح! +') + AR(dist) + ' ميل');
+  banner(fluent ? '🔥 نيترو!' : 'أحسنت!', 'good');
+  drive(dist, fluent).then(() => { if (!timeUp) ask(); else finish(); });
+}
+
+// ---------------- world: Flow scene videos + car sprite ----------------
+let scroll = 0, speed = 0, rev = 0, braking = 0, nitro = 0, tLeft = SECS, last = 0, drivingP = null;
+const MI_PX = 1400 / 1.2;
+const SCENES = ['city', 'coast', 'desert', 'night'];
+const MILES_PER_SCENE = 3;
+const vid = $('world'); let sceneIdx = -1;
+function setScene(i) {
+  if (i === sceneIdx) return; sceneIdx = i; const name = SCENES[i % SCENES.length];
+  $('fade').style.opacity = 1;
+  setTimeout(() => { vid.innerHTML = `<source src="assets/scene_${name}.mp4" type="video/mp4"><source src="assets/scene_${name}.webm" type="video/webm">`; vid.load(); vid.currentTime = 0; $('fade').style.opacity = 0; if (speed > .05) vid.play().catch(() => {}); }, 450);
+}
+function drive(dist, fluent) { return new Promise(res => { drivingP = { leftPx: dist * MI_PX, fluent, res }; if (fluent) nitro = 1; }); }
+function update(dt) {
+  if (drivingP) {
+    const target = drivingP.fluent ? 1.3 : .85; speed += (target - speed) * Math.min(1, dt * 2.5);
+    const d = speed * dt * 1400; scroll += d; drivingP.leftPx -= d;
+    if (drivingP.leftPx <= 0) { scroll += drivingP.leftPx; const r = drivingP.res; drivingP = null; setTimeout(r, 350); }
+  } else { speed += (0 - speed) * Math.min(1, dt * 3); }
+  miles = scroll / MI_PX;
+  setScene(Math.floor(miles / MILES_PER_SCENE));
+  if (speed > .05) { if (vid.paused) vid.play().catch(() => {}); vid.playbackRate = Math.max(.25, Math.min(2, speed * 1.1)); } else if (!vid.paused) vid.pause();
+  nitro = Math.max(0, nitro - dt * .7); braking = Math.max(0, braking - dt * 1.5);
+  engine(Math.max(speed / 1.3, rev * .4));
+  $('odo').textContent = AR(miles.toFixed(1));
+}
+const CARS = [
+  { id: 'super', name: 'سوبر', img: 'assets/car_super.png', w: .30, ex: [.40, .62] }, { id: 'coupe', name: 'كوبيه رياضيّة', img: 'assets/car_coupe.png', w: .29, ex: [.40, .60] },
+  { id: 'suv', name: 'دفع رباعيّ', img: 'assets/car_suv.png', w: .28, ex: [.40, .60] }, { id: 'sedan', name: 'سيدان', img: 'assets/car_sedan.png', w: .29, ex: [.40, .60] },
+  { id: 'ev', name: 'كهربائيّة', img: 'assets/car_ev.png', w: .27, ex: [.42, .58] }, { id: 'pickup', name: 'بيك أب', img: 'assets/car_pickup.png', w: .28, ex: [.40, .60] },
+];
+CARS.forEach(c => { c.el = new Image(); c.el.src = c.img; });
+const R = (x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
+let shakeT = 0;
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  if (!car || !car.el.complete || !car.el.naturalWidth) return;
+  const t = performance.now() / 1000;
+  const cw = W * car.w, ch = cw * car.el.naturalHeight / car.el.naturalWidth;
+  // pull-away: at speed the car sits a little higher & smaller (moving forward into the scene)
+  const k = 1 - speed * .06, bob = speed > .05 ? Math.sin(t * 28) * 2.5 * speed : 0, sh = speed > .9 ? (Math.random() - .5) * 4 : 0;
+  const x = W / 2 - cw * k / 2 + sh, y = H - ch * k - 24 - speed * 40 + bob;
+  // speed lines on nitro
+  if (nitro > 0) { ctx.strokeStyle = `rgba(255,255,255,${nitro * .5})`; ctx.lineWidth = 2; for (let i = 0; i < 18; i++) { const a = (i / 18) * Math.PI * 2 + t * .3, r1 = 420 + Math.random() * 80, r2 = r1 + 120 + Math.random() * 200; ctx.beginPath(); ctx.moveTo(W / 2 + Math.cos(a) * r1, H / 2 + Math.sin(a) * r1 * .6); ctx.lineTo(W / 2 + Math.cos(a) * r2, H / 2 + Math.sin(a) * r2 * .6); ctx.stroke(); } }
+  // ground shadow
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.ellipse(W / 2 + sh, y + ch * k - 6, cw * k * .46, 26, 0, 0, 7); ctx.fill();
+  // nitro flames from the exhausts
+  if (nitro > 0) for (const ex of car.ex) { const fx = x + cw * k * ex, fy = y + ch * k * .93; for (let i = 0; i < 6; i++) { const L = (40 + Math.random() * 90) * nitro; ctx.fillStyle = `rgba(${200 + Math.random() * 55},${80 + Math.random() * 120},${20 + Math.random() * 40},${.55 * nitro})`; ctx.beginPath(); ctx.ellipse(fx, fy + L / 2, 8 + Math.random() * 8, L, 0, 0, 7); ctx.fill(); } }
+  // brake smoke
+  if (braking > 0) { ctx.fillStyle = `rgba(200,200,200,${braking * .5})`; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.arc(x + cw * k * (.15 + Math.random() * .7), y + ch * k - 10 + Math.random() * 30, 20 + Math.random() * 30 * (1 - braking + .3), 0, 7); ctx.fill(); } }
+  ctx.drawImage(car.el, x, y, cw * k, ch * k);
+  // tail-light glow when stopped / braking
+  const glow = braking > 0 ? .9 : (speed < .05 ? .35 : 0);
+  if (glow) { ctx.fillStyle = `rgba(255,40,40,${glow * .28})`; for (const ex of [.2, .8]) { ctx.beginPath(); ctx.ellipse(x + cw * k * ex, y + ch * k * .64, cw * k * .12, 14, 0, 0, 7); ctx.fill(); } }
+  // rev bar while reading
+  if (rev > 0 && !drivingP) { ctx.fillStyle = 'rgba(0,0,0,.55)'; R(W / 2 - 160, H - 36, 320, 22, 10); ctx.fill(); ctx.fillStyle = '#ffb703'; R(W / 2 - 156, H - 32, 312 * rev, 14, 7); ctx.fill(); }
+}
+function frame(now) { const dt = Math.min(.05, (now - last) / 1000) || 0; last = now; if (running) update(dt); draw(); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+// ---------------- flow: name → car → race → result ----------------
+const board = JSON.parse(localStorage.getItem('wabel-race-board') || '[]');
+NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { driver = n; $('who').textContent = n; $('s-name').classList.add('hidden'); $('s-car').classList.remove('hidden'); initAudio(); }; $('names').appendChild(b); });
+CARS.forEach(c => { const b = document.createElement('button'); b.className = 'carbtn'; const cc = document.createElement('img'); cc.src = c.img; b.appendChild(cc); const l = document.createElement('div'); l.textContent = c.name; b.appendChild(l); b.onclick = () => { car = c; [...$('cars').children].forEach(x => x.classList.remove('sel')); b.classList.add('sel'); $('go').disabled = false; }; $('cars').appendChild(b); });
+$('go').onclick = start;
+$('again').onclick = () => { $('s-result').classList.add('hidden'); $('s-name').classList.remove('hidden'); };
+$('retry').onclick = () => { $('s-result').classList.add('hidden'); start(); };
+let timerI;
+async function start() {
+  $('s-car').classList.add('hidden'); $('hud').classList.remove('hidden');
+  miles = 0; stat = { lines: 0, darj: 0, wrong: 0 }; tLeft = SECS; timeUp = false; running = true; scroll = 0; speed = 0; used = new Set(); sceneIdx = -1; setScene(0); vid.pause();
+  if (ENGINE === 'chrome' && !(await azInit())) { initRec(); }
+  $('card').className = ''; $('line').textContent = 'استعدّ…'; setStatus('prep', '٣ … ٢ … ١');
+  await new Promise(r => setTimeout(r, 1500));
+  clearInterval(timerI); timerI = setInterval(() => { tLeft--; const t = $('timer'); t.textContent = AR(Math.floor(tLeft / 60)) + ':' + AR(String(tLeft % 60).padStart(2, '0')); t.className = 'pill' + (tLeft <= 20 ? ' low' : ''); if (tLeft <= 0) { clearInterval(timerI); timeUp = true; if (cur && !cur.done) { cur.done = true; listen(false); finish(); } } }, 1000);
+  ask();
+}
+function finish() {
+  running = false; vid.pause(); listen(false); azShutdown(); $('card').className = 'hidden'; $('hud').classList.add('hidden'); engine(0);
+  const m = +miles.toFixed(1);
+  board.push({ n: driver, m, l: stat.lines, d: stat.darj, t: Date.now() }); board.sort((a, b) => b.m - a.m); localStorage.setItem('wabel-race-board', JSON.stringify(board.slice(0, 50)));
+  $('r-name').textContent = driver + ' 🚗 ' + car.name; $('r-miles').textContent = AR(m);
+  $('r-stats').textContent = 'جمل صحيحة: ' + AR(stat.lines) + ' · درج: ' + AR(stat.darj) + ' · أخطاء: ' + AR(stat.wrong);
+  const tb = $('board').querySelector('tbody'); tb.innerHTML = ''; board.slice(0, 8).forEach((r, i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${AR(i + 1)}</td><td>${r.n}</td><td class="m">${AR(r.m)}</td><td>${AR(r.l)}</td><td>${AR(r.d)}</td>`; tb.appendChild(tr); });
+  $('s-result').classList.remove('hidden');
+}
+// teacher keys: Enter = accept the sentence, Backspace = wrong, L = clear leaderboard
+addEventListener('keydown', e => {
+  if (e.key === 'Enter' && cur && !cur.done && running) { cur.pos = cur.units.length; success(true); }
+  if (e.key === 'Backspace' && cur && !cur.done && running) { e.preventDefault(); cur.pos = 0; miss('word'); }
+  if (e.key.toLowerCase() === 'l' && e.shiftKey) { localStorage.removeItem('wabel-race-board'); board.length = 0; }
+});
+</script>
+</body>
+</html>
