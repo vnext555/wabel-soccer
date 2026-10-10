@@ -282,11 +282,11 @@ function update(dt) {
   $('odo').textContent = AR(miles.toFixed(1));
 }
 const CARS = [
-  { id: 'super', name: 'سوبر', img: 'assets/car_super.png', w: .30, ex: [.40, .62] }, { id: 'coupe', name: 'كوبيه رياضيّة', img: 'assets/car_coupe.png', w: .29, ex: [.40, .60] },
-  { id: 'suv', name: 'دفع رباعيّ', img: 'assets/car_suv.png', w: .28, ex: [.40, .60] }, { id: 'sedan', name: 'سيدان', img: 'assets/car_sedan.png', w: .29, ex: [.40, .60] },
-  { id: 'ev', name: 'كهربائيّة', img: 'assets/car_ev.png', w: .27, ex: [.42, .58] }, { id: 'pickup', name: 'بيك أب', img: 'assets/car_pickup.png', w: .28, ex: [.40, .60] },
+  { id: 'super', name: 'سوبر', img: 'assets/car_super.png', w: .32, ex: [.09, .91] }, { id: 'coupe', name: 'كوبيه رياضيّة', img: 'assets/car_coupe.png', w: .30, ex: [.27, .73] },
+  { id: 'suv', name: 'دفع رباعيّ', img: 'assets/car_suv.png', w: .28, ex: [.22, .78] }, { id: 'sedan', name: 'سيدان', img: 'assets/car_sedan.png', w: .29, ex: [.2, .8] },
+  { id: 'ev', name: 'كهربائيّة', img: 'assets/car_ev.png', w: .28, ex: [.35, .65] }, { id: 'pickup', name: 'بيك أب', img: 'assets/car_pickup.png', w: .29, ex: [.2, .8] },
 ];
-CARS.forEach(c => { c.el = new Image(); c.el.src = c.img; });
+CARS.forEach(c => { c.el = new Image(); c.el.src = c.img + '?v=2'; });
 const R = (x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); };
 let shakeT = 0;
 function draw() {
@@ -318,7 +318,7 @@ requestAnimationFrame(frame);
 // ---------------- flow: name → car → race → result ----------------
 const board = JSON.parse(localStorage.getItem('wabel-race-board') || '[]');
 NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { driver = n; $('who').textContent = n; $('s-name').classList.add('hidden'); $('s-car').classList.remove('hidden'); initAudio(); if (ENGINE === 'chrome') azInit(); }; $('names').appendChild(b); });
-CARS.forEach(c => { const b = document.createElement('button'); b.className = 'carbtn'; const cc = document.createElement('img'); cc.src = c.img; b.appendChild(cc); const l = document.createElement('div'); l.textContent = c.name; b.appendChild(l); b.onclick = () => { car = c; [...$('cars').children].forEach(x => x.classList.remove('sel')); b.classList.add('sel'); $('go').disabled = false; }; $('cars').appendChild(b); });
+CARS.forEach(c => { const b = document.createElement('button'); b.className = 'carbtn'; const cc = document.createElement('img'); cc.src = c.img + '?v=2'; b.appendChild(cc); const l = document.createElement('div'); l.textContent = c.name; b.appendChild(l); b.onclick = () => { car = c; [...$('cars').children].forEach(x => x.classList.remove('sel')); b.classList.add('sel'); $('go').disabled = false; }; $('cars').appendChild(b); });
 $('go').onclick = start;
 $('again').onclick = () => { $('s-result').classList.add('hidden'); $('s-name').classList.remove('hidden'); };
 $('retry').onclick = () => { $('s-result').classList.add('hidden'); start(); };
