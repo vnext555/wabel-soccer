@@ -24,6 +24,9 @@
   #clock { margin-inline-start: calc(var(--u)*1); background: #fff; color: #111; padding: 0 calc(var(--u)*.6); border-radius: calc(var(--u)*.4); direction: ltr; }
   #stars { position: absolute; left: calc(var(--u)*2); top: 0; font-size: calc(var(--u)*2.4); font-weight: 800; background: rgba(8,16,32,.85); padding: calc(var(--u)*.2) calc(var(--u)*1.2); border-radius: calc(var(--u)*1); direction: ltr; }
   #mic { position: absolute; left: calc(var(--u)*2); top: calc(var(--u)*5); font-size: calc(var(--u)*2.2); width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(8,16,32,.7); transition: background .2s; }
+  #exitBtn { position: absolute; right: calc(var(--u)*2); top: calc(var(--u)*5); font-size: calc(var(--u)*2.2); width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(8,16,32,.7); color: #fff; cursor: pointer; z-index: 5; }
+  #exitBtn.on { display: flex; pointer-events: auto; }
+  #exitBtn:hover { background: #7a1c1c; }
   #mic.on { background: #1f9d55; animation: pulse 1s infinite; }
   #mic.off { background: #7a1c1c; }
   @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(31,157,85,.7); } 50% { box-shadow: 0 0 0 calc(var(--u)*1) rgba(31,157,85,0); } }
@@ -129,6 +132,7 @@
     </div>
     <div id="stars">⭐ 0</div>
     <div id="mic">🎤</div>
+  <div id="exitBtn" title="خروج (Esc)">✕</div>
   </div>
   <div id="ycard"></div>
   <div id="card" class="hidden">
@@ -635,7 +639,9 @@ function speakLine() {
   const txt = cur.spec.segs.map(s => typeof s.t === 'number' ? NUMW[s.t] : s.t).join('');
   const u = new SpeechSynthesisUtterance(txt); u.voice = v; u.lang = v.lang; u.rate = .85;
   speaking = true;
-  u.onend = u.onerror = () => setTimeout(() => { speaking = false; }, 400);
+  const done = () => setTimeout(() => { speaking = false; }, 400);
+  u.onend = u.onerror = done;
+  clearTimeout(speakLine.wd); speakLine.wd = setTimeout(() => { speaking = false; try { speechSynthesis.cancel(); } catch (e) {} }, Math.min(8000, 1500 + txt.length * 90)); // Chrome sometimes never fires onend
   speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
 
@@ -1035,6 +1041,13 @@ function buildPlan() {
 }
 
 let running = false, challenge = false, timeUp = false, chalLeft = 0, chalName = '';
+let aborted = false;
+function exitGame() {
+  if (!running || aborted) return;
+  aborted = true; timeUp = true; paused = false; $('pauseOv').className = 'hidden';
+  speaking = false; try { speechSynthesis.cancel(); } catch (e) {}
+  anims.forEach(a => { a.t = a.dur; }); cancelAsk();
+}
 function cancelAsk() { if (!cur || cur.done) return; cur.done = true; listen(false); const r = cur.res; $('card').className = 'hidden'; $('flow').className = ''; cur = null; r(); }
 function fmtT(t) { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
 function tickTimer(dt) {
@@ -1068,7 +1081,8 @@ async function runChallenge() {
       await wait(.3);
     }
   }
-  setCrowd(0); running = false; challenge = false; stopRec(); azShutdown(); $('timer').className = ''; $('clock').style.display = '';
+  setCrowd(0); running = false; challenge = false; stopRec(); azShutdown(); $('timer').className = ''; $('clock').style.display = ''; $('exitBtn').className = '';
+  if (aborted) { aborted = false; timeUp = false; newWorld(); $('start').className = 'screen'; return; }
   const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5 + stat.darj * 10;
   BOARD.push({ name: chalName || ('لاعب ' + (BOARD.length + 1)), goals: stat.goals, lines: stat.lines, darj: stat.darj, wrong: stat.wrong, total });
   renderBoard($('board'), BOARD.length - 1);
@@ -1083,11 +1097,13 @@ async function runMatch() {
   setCrowd(.1);
   for (let i = 0; i < E; i++) {
     const m = i <= hIdx ? Math.round(45 * i / hIdx) : 45 + Math.round(45 * (i - hIdx) / (E - 1 - hIdx));
+    if (timeUp) break;
     $('clock').textContent = m + "'";
     await EV[plan[i].k](plan[i]);
     await wait(.3);
   }
-  setCrowd(0); running = false; stopRec(); azShutdown();
+  setCrowd(0); running = false; stopRec(); azShutdown(); $('exitBtn').className = '';
+  if (aborted) { aborted = false; timeUp = false; newWorld(); $('start').className = 'screen'; return; }
   $('final').textContent = `${score.red} - ${score.blue}`;
   $('final').innerHTML = `<span style="color:#e63946">${score.red}</span> - <span style="color:#60a5fa">${score.blue}</span>`;
   $('endStars').textContent = '⭐ ' + stars;
@@ -1101,8 +1117,9 @@ async function prep() {
   if (await azInit()) await azBoot(); else { initRec(); startRec(); }
   ['start', 'end', 'pickName', 'chalEnd', 'winner'].forEach(id => $(id).className = 'screen hidden');
 }
-async function begin() { await prep(); runMatch(); }
-async function beginChal() { await prep(); runChallenge(); }
+async function begin() { await prep(); $('exitBtn').className = 'on'; runMatch(); }
+async function beginChal() { await prep(); $('exitBtn').className = 'on'; runChallenge(); }
+$('exitBtn').onclick = exitGame;
 function showNames() {
   ['start', 'end', 'chalEnd', 'winner'].forEach(id => $(id).className = 'screen hidden');
   const box = $('nameBtns'); box.innerHTML = '';
@@ -1150,6 +1167,7 @@ addEventListener('keydown', e => {
   else if (k === 'l') downloadLog();
   else if (k === 'x' || k === 'backspace') { if (cur && !paused) { logEvent('TEACHER-FAIL'); miss('wrong'); } }
   else if (k === 'h') { if (cur) { showHint(); speakLine(); } }
+  else if (k === 'escape') exitGame();
   else if (k === 'p') togglePause();
   else if (k === 's') { muted = !muted; if (master) master.gain.value = muted ? 0 : .9; }
   else if (k === 'd') $('dbg').classList.toggle('on');
