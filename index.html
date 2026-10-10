@@ -344,7 +344,8 @@ function norm(s) {
   return s.replace(/[ً-ٰٟـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
     .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/ء/g, '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).toLowerCase();
 }
-const tokens = nt => nt.split(/[^ء-يa-z0-9]+/).filter(Boolean);
+const NAME_JOIN = [['ما هر', 'ماهر'], ['مه هر', 'ماهر'], ['بر اء', 'برا'], ['بر ا', 'برا'], ['و ليد', 'وليد'], ['خا لد', 'خالد'], ['ا دم', 'ادم']];
+const tokens = nt => NAME_JOIN.reduce((t, [r, w]) => (' ' + t + ' ').split(' ' + r + ' ').join(' ' + w + ' ').trim(), nt).split(/[^ء-يa-z0-9]+/).filter(Boolean);
 const U = { 1: ['واحد', 'احد'], 2: ['اثن', 'اتن', 'ثنين', 'تنين'], 3: ['ثلاث', 'تلات', 'ثلث'], 4: ['اربع'], 5: ['خمس'], 6: ['ست'], 7: ['سبع'], 8: ['ثمان', 'تمان', 'ثمن', 'تمن'], 9: ['تسع'] };
 function numMatch(nt, tk, n) {
   if (new RegExp('(^|\\D)' + n + '(\\D|$)').test(nt)) return true;
@@ -445,13 +446,14 @@ function compile(spec) {
 function unitMatch(tok, u, sub) { // returns {ok, sub} — sub = progress inside a multi-word number
   if (u.num !== undefined) {
     if (/^\d+$/.test(tok)) return { ok: +tok === u.num, sub: 0 };
+    if (u.words.length === 1 && numMatch(tok, [tok], u.num)) return { ok: true, sub: 0 };   // عشرين، تسعه…
     if (wmatch(tok, u.words[sub])) return sub + 1 === u.words.length ? { ok: true, sub: 0 } : { ok: false, sub: sub + 1, partial: true };
     return { ok: false, sub };
   }
   return { ok: wmatch(tok, u.key), sub: 0 };
 }
 // synonyms / common mishearings for hard words (normalized)
-const ALT = { 'خطا': ['خطا', 'خطو', 'خطي'], 'وبطاقه': ['وبطاقه', 'بطاقه'], 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
+const ALT = { 'ماهر': ['ماهر', 'ماهير', 'مهر', 'ماهره', 'مهير', 'ماهرا', 'ماهيرا', 'ماهور'], 'ادم': ['ادم', 'ادام', 'اديم', 'ادمي'], 'برا': ['برا', 'براء', 'بره', 'برى', 'براا', 'بارا', 'براه'], 'عمر': ['عمر', 'عمار', 'عمرو', 'عومر', 'عمير'], 'وليد': ['وليد', 'ولييد', 'وليدي', 'وليدو'], 'خالد': ['خالد', 'خاليد', 'خالدي', 'خاليد'], 'خطا': ['خطا', 'خطو', 'خطي'], 'وبطاقه': ['وبطاقه', 'بطاقه'], 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
 function umatch(tok, u) { return wmatch(tok, u.key) || (ALT[u.key] || []).some(k => wmatch(tok, k)); }
 function unitOk(tok, u, sub) { if (u.num !== undefined) return unitMatch(tok, u, sub); return { ok: umatch(tok, u), sub: 0 }; }
 function align(toks, units) {
