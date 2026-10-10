@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>المعلّق الصغير</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&family=Noto+Naskh+Arabic:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --u: 12px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b2413; overflow: hidden; font-family: 'Cairo', sans-serif; color: #fff; }
+  body { display: flex; align-items: center; justify-content: center; }
+  #stage { position: relative; width: 1600px; height: 900px; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: calc(var(--u) * .6); }
+
+  #hud { position: absolute; top: calc(var(--u)*1.2); left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
+  #brand { position: absolute; right: calc(var(--u)*2); top: 0; font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*3); color: #ffd166; text-shadow: 0 2px 6px rgba(0,0,0,.5); }
+  #score { display: flex; align-items: center; gap: calc(var(--u)*1); background: rgba(8,16,32,.85); padding: calc(var(--u)*.4) calc(var(--u)*1.6); border-radius: calc(var(--u)*1); font-size: calc(var(--u)*2.1); font-weight: 800; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  #score .t { padding: 0 calc(var(--u)*.6); border-radius: calc(var(--u)*.4); }
+  #score .red { background: #e63946; } #score .blue { background: #1d6fd8; }
+  #score b { min-width: calc(var(--u)*2); text-align: center; font-size: calc(var(--u)*2.6); }
+  #clock { margin-inline-start: calc(var(--u)*1); background: #fff; color: #111; padding: 0 calc(var(--u)*.6); border-radius: calc(var(--u)*.4); direction: ltr; }
+  #stars { position: absolute; left: calc(var(--u)*2); top: 0; font-size: calc(var(--u)*2.4); font-weight: 800; background: rgba(8,16,32,.85); padding: calc(var(--u)*.2) calc(var(--u)*1.2); border-radius: calc(var(--u)*1); direction: ltr; }
+  #mic { position: absolute; left: calc(var(--u)*2); top: calc(var(--u)*5); font-size: calc(var(--u)*2.2); width: calc(var(--u)*4.4); height: calc(var(--u)*4.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(8,16,32,.7); transition: background .2s; }
+  #mic.on { background: #1f9d55; animation: pulse 1s infinite; }
+  #mic.off { background: #7a1c1c; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(31,157,85,.7); } 50% { box-shadow: 0 0 0 calc(var(--u)*1) rgba(31,157,85,0); } }
+
+  #card { position: absolute; left: 8%; right: 8%; bottom: calc(var(--u)*2.5); background: rgba(8,16,32,.92); border: calc(var(--u)*.3) solid #ffd166; border-radius: calc(var(--u)*1.6); padding: calc(var(--u)*1.4) calc(var(--u)*2); text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); transition: transform .25s, opacity .25s, border-color .2s; }
+  #card.top { bottom: auto; top: calc(var(--u)*7); }
+  #card.hidden { opacity: 0; transform: translateY(40%); pointer-events: none; }
+  #card.good { border-color: #4ade80; }
+  #card.shake { animation: shake .45s; border-color: #ef4444; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-2%)} 40%{transform:translateX(2%)} 60%{transform:translateX(-1.5%)} 80%{transform:translateX(1.5%)} }
+  #line { font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*4.4); line-height: 1.6; }
+  #line .kw { color: #ffd166; border-bottom: calc(var(--u)*.25) dashed rgba(255,209,102,.6); transition: color .2s; }
+  #line .kw { color: #fff; border-bottom-color: rgba(255,255,255,.25); }
+  #line .kw.ok { color: #4ade80; border-bottom-color: #4ade80; }
+  #line .kw.next { color: #ffd166; border-bottom-color: #ffd166; border-bottom-style: solid; }
+  #line .kw.bad { color: #f87171; border-bottom-color: #f87171; border-bottom-style: solid; }
+  #line .num { font-family: 'Cairo', sans-serif; font-weight: 800; direction: ltr; unicode-bidi: isolate; }
+  #hint { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.6); color: #93c5fd; min-height: 0; }
+  #hint:empty { display: none; }
+  #heard { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2); color: rgba(255,255,255,.6); margin-top: calc(var(--u)*.3); min-height: calc(var(--u)*2.6); }
+  #status { display: inline-flex; align-items: center; gap: calc(var(--u)*.8); margin-top: calc(var(--u)*.6); padding: calc(var(--u)*.35) calc(var(--u)*1.6); border-radius: calc(var(--u)*2); font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*2.2); background: rgba(255,255,255,.1); color: #e5e7eb; transition: background .2s, color .2s; }
+  #status.listen { background: rgba(31,157,85,.25); color: #86efac; }
+  #status.listen::before { content: ''; width: calc(var(--u)*1.1); height: calc(var(--u)*1.1); border-radius: 50%; background: #22c55e; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  #status.part { background: rgba(34,197,94,.3); color: #bbf7d0; }
+  #status.bad { background: rgba(239,68,68,.35); color: #fecaca; }
+  #status.ok { background: #22c55e; color: #052e16; font-size: calc(var(--u)*2.8); }
+  #status.darj { background: #ffd166; color: #3b2a00; font-size: calc(var(--u)*2.8); }
+  #status.prep { background: rgba(56,189,248,.3); color: #bae6fd; }
+  #status.reset { background: rgba(249,115,22,.35); color: #fed7aa; }
+  #flow { height: calc(var(--u)*1); margin: calc(var(--u)*.6) auto 0; width: 70%; background: rgba(255,255,255,.12); border-radius: calc(var(--u)*.5); overflow: hidden; display: none; }
+  #flow.on { display: block; }
+  #flow i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #22c55e, #ffd166); transform-origin: right; }
+  .lvl { display: flex; gap: calc(var(--u)*1); margin-top: calc(var(--u)*.4); }
+  .lvl button { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.2); font-weight: 700; padding: calc(var(--u)*.3) calc(var(--u)*1.6); border-radius: calc(var(--u)*1); border: calc(var(--u)*.2) solid #ffd166; background: rgba(0,0,0,.35); color: #fff; cursor: pointer; }
+  .lvl button.sel { background: #ffd166; color: #111; }
+  #status.off { background: rgba(239,68,68,.25); color: #fca5a5; }
+  #status .miss { color: #fde68a; }
+  #timer { display: none; margin-inline-start: calc(var(--u)*1); background: #111827; color: #fff; padding: 0 calc(var(--u)*.8); border-radius: calc(var(--u)*.4); direction: ltr; font-variant-numeric: tabular-nums; }
+  #timer.on { display: inline-block; } #timer.low { background: #dc2626; animation: blink 1s infinite; }
+  .modes { display: flex; gap: calc(var(--u)*2); flex-wrap: wrap; justify-content: center; }
+  .btn.alt { background: #38bdf8; box-shadow: 0 6px 0 #0369a1; }
+  .btn.alt:active { box-shadow: 0 2px 0 #0369a1; }
+  .names { display: flex; gap: calc(var(--u)*1); flex-wrap: wrap; justify-content: center; max-width: 80%; }
+  .names button { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.6); font-weight: 700; padding: calc(var(--u)*.4) calc(var(--u)*2); border-radius: calc(var(--u)*1); border: calc(var(--u)*.25) solid #ffd166; background: rgba(0,0,0,.35); color: #fff; cursor: pointer; }
+  .names button.sel { background: #ffd166; color: #111; }
+  #result { display: grid; grid-template-columns: auto auto; gap: calc(var(--u)*.6) calc(var(--u)*3); font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.8); text-align: right; }
+  #result b { font-family: 'Cairo', sans-serif; font-size: calc(var(--u)*3.2); color: #ffd166; direction: ltr; }
+  #result .total { grid-column: 1 / -1; text-align: center; font-size: calc(var(--u)*4); margin-top: calc(var(--u)*.6); }
+  #result .total b { font-size: calc(var(--u)*6); }
+  #board, #board2 { width: min(70%, calc(var(--u)*60)); border-collapse: collapse; font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.2); background: rgba(0,0,0,.35); border-radius: calc(var(--u)*1); overflow: hidden; }
+  #board th, #board td, #board2 th, #board2 td { padding: calc(var(--u)*.35) calc(var(--u)*1); text-align: center; }
+  #board th, #board2 th { background: rgba(255,209,102,.2); color: #ffd166; font-weight: 700; }
+  #board td.n, #board2 td.n { text-align: right; font-weight: 700; }
+  #board tr.first td, #board2 tr.first td { color: #ffd166; } #board tr.me td { background: rgba(56,189,248,.18); }
+  #board td.s, #board2 td.s { font-family: 'Cairo', sans-serif; font-weight: 800; direction: ltr; }
+  .btn.gold { background: linear-gradient(180deg, #ffe08a, #f5b400); box-shadow: 0 6px 0 #a67c00; }
+  .btn.gold:active { box-shadow: 0 2px 0 #a67c00; }
+  #winner.screen { gap: calc(var(--u)*.8); }
+  #winner h1 { font-size: calc(var(--u)*5); }
+  #board2 { font-size: calc(var(--u)*1.9); } #board2 th, #board2 td { padding: calc(var(--u)*.2) calc(var(--u)*1); }
+  #chalEnd.screen { gap: calc(var(--u)*.8); } #chalEnd h1 { font-size: calc(var(--u)*5); }
+  #chalEnd #result { font-size: calc(var(--u)*2.3); gap: calc(var(--u)*.2) calc(var(--u)*3); } #chalEnd #result b { font-size: calc(var(--u)*2.6); } #chalEnd #result .total { font-size: calc(var(--u)*3.2); margin-top: 0; } #chalEnd #result .total b { font-size: calc(var(--u)*4.5); }
+  #chalEnd #board { font-size: calc(var(--u)*1.9); } #chalEnd #board th, #chalEnd #board td { padding: calc(var(--u)*.2) calc(var(--u)*1); }
+  #podium { display: flex; align-items: flex-end; gap: calc(var(--u)*1.5); margin-top: calc(var(--u)*1); direction: ltr; }
+  .step { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: calc(var(--u)*16); border-radius: calc(var(--u)*1) calc(var(--u)*1) 0 0; color: #111; font-family: 'Noto Naskh Arabic', serif; font-weight: 700; padding-bottom: calc(var(--u)*.6); }
+  .step .nm { font-size: calc(var(--u)*3); color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.6); margin-bottom: calc(var(--u)*.4); }
+  .step .sc { font-family: 'Cairo', sans-serif; font-size: calc(var(--u)*2.6); }
+  .step.p1 { height: calc(var(--u)*14); background: #ffd166; } .step.p2 { height: calc(var(--u)*10); background: #cbd5e1; } .step.p3 { height: calc(var(--u)*8); background: #d9a066; }
+  .step .medal { font-size: calc(var(--u)*4); line-height: 1; margin-bottom: calc(var(--u)*.4); }
+  #winName { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*7); font-weight: 700; color: #ffd166; line-height: 1.3; animation: pop .6s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+  #bubble { position: absolute; top: calc(var(--u)*-3.6); left: 50%; transform: translateX(-50%) scale(0); background: #ffd166; color: #111; font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*2.4); padding: calc(var(--u)*.2) calc(var(--u)*1.6); border-radius: calc(var(--u)*2); white-space: nowrap; transition: transform .2s; }
+  #bubble.show { transform: translateX(-50%) scale(1); }
+  #bubble.bad { background: #ef4444; color: #fff; }
+  #bubble.ok { background: #4ade80; }
+
+  #ycard { position: absolute; left: 50%; top: 30%; width: calc(var(--u)*7); height: calc(var(--u)*10); background: #facc15; border-radius: calc(var(--u)*.6); box-shadow: 0 8px 20px rgba(0,0,0,.5); transform: translate(-50%,-50%) rotate(-8deg) scale(0); transition: transform .3s cubic-bezier(.3,1.6,.5,1); }
+  #ycard.show { transform: translate(-50%,-50%) rotate(-8deg) scale(1); }
+
+  .screen { position: absolute; inset: 0; background: rgba(6,20,12,.88); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u)*1.6); text-align: center; border-radius: calc(var(--u)*.6); }
+  .screen.hidden { display: none; }
+  .screen .brand { font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*4); color: #ffd166; font-weight: 700; }
+  .screen h1 { margin: 0; font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*7); line-height: 1.3; }
+  .screen p { margin: 0; font-family: 'Noto Naskh Arabic', serif; font-size: calc(var(--u)*2.8); color: #d1fae5; }
+  .screen .big { font-size: calc(var(--u)*6); font-weight: 800; direction: ltr; }
+  .btn { font-family: 'Noto Naskh Arabic', serif; font-weight: 700; font-size: calc(var(--u)*3.2); background: #ffd166; color: #111; border: 0; border-radius: calc(var(--u)*1.4); padding: calc(var(--u)*.6) calc(var(--u)*3); cursor: pointer; box-shadow: 0 6px 0 #b8860b; }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b8860b; }
+  #dbg { position: absolute; left: calc(var(--u)*1); top: calc(var(--u)*10); width: calc(var(--u)*34); max-height: 60%; overflow: hidden; background: rgba(0,0,0,.8); color: #d1d5db; font: calc(var(--u)*1.3)/1.5 monospace; padding: calc(var(--u)*.8); border-radius: calc(var(--u)*.6); direction: rtl; text-align: right; display: none; }
+  #dbg.on { display: block; } #dbg .f { color: #fde68a; } #dbg .i { color: #9ca3af; } #dbg .h { color: #86efac; }
+  #pauseOv { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--u)*12); background: rgba(0,0,0,.45); border-radius: calc(var(--u)*.6); }
+  #pauseOv.hidden { display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="1600" height="900"></canvas>
+  <div id="hud">
+    <div id="brand">وابِل</div>
+    <div id="score">
+      <span class="t red">الأَحْمَرُ</span><b id="sr">0</b><span>-</span><b id="sb">0</b><span class="t blue">الأَزْرَقُ</span>
+      <span id="clock">0'</span><span id="timer">3:00</span>
+    </div>
+    <div id="stars">⭐ 0</div>
+    <div id="mic">🎤</div>
+  </div>
+  <div id="ycard"></div>
+  <div id="card" class="hidden">
+    <div id="bubble"></div>
+    <div id="line"></div>
+    <div id="hint"></div>
+    <div id="heard"></div>
+    <div id="status"></div>
+    <div id="flow"><i></i></div>
+  </div>
+  <div id="start" class="screen">
+    <div class="brand">وابِل</div>
+    <h1>⚽ المُعَلِّقُ الصَّغيرُ ⚽</h1>
+    <p>عَلِّقْ عَلى المُباراةِ بِالعَرَبِيَّةِ… وَالمُباراةُ تَقِفُ حَتّى تَقولَها صَحيحَةً!</p>
+    <div class="lvl"><button id="lv1">مُسْتَوى ١: كَلِمَةً كَلِمَةً</button><button id="lv2" class="sel">مُسْتَوى ٢: دَرْج (قِراءَةٌ مُتَّصِلَةٌ)</button></div>
+    <div class="modes">
+      <button class="btn" id="go">مُباراةُ الصَّفِّ</button>
+      <button class="btn alt" id="goChal">تَحَدّي ٣ دَقائِقَ ⏱️</button>
+    </div>
+  </div>
+  <div id="pickName" class="screen hidden">
+    <div class="brand">وابِل</div>
+    <h1>مَنِ المُعَلِّقُ؟</h1>
+    <p>اضْغَطْ عَلى اسْمِكَ ثُمَّ ابْدَأْ. عِنْدَكَ ٣ دَقائِقَ: كُلُّ جُمْلَةٍ صَحيحَةٍ تُقَرِّبُكَ مِنَ الهَدَفِ!</p>
+    <div class="names" id="nameBtns"></div>
+    <button class="btn alt" id="goChal2">ابْدَأِ التَّحَدّي</button>
+  </div>
+  <div id="chalEnd" class="screen hidden">
+    <div class="brand">وابِل</div>
+    <h1 id="chalTitle">انْتَهى الوَقْتُ!</h1>
+    <div id="result"></div>
+    <table id="board"></table>
+    <div class="modes">
+      <button class="btn alt" id="chalAgain">تَحَدٍّ جَديدٌ (طالِبٌ آخَرُ)</button>
+      <button class="btn gold" id="chalWin">🏆 إِعْلانُ الفائِزِ</button>
+      <button class="btn" id="chalHome">القائِمَةُ</button>
+    </div>
+  </div>
+  <div id="winner" class="screen hidden">
+    <div class="brand">وابِل</div>
+    <h1>🏆 الفائِزُ هُوَ</h1>
+    <div id="winName"></div>
+    <div id="podium"></div>
+    <table id="board2"></table>
+    <div class="modes">
+      <button class="btn alt" id="winAgain">تَحَدٍّ جَديدٌ</button>
+      <button class="btn" id="winReset">مُسابَقَةٌ جَديدَةٌ (مَسْحُ النَّتائِجِ)</button>
+    </div>
+  </div>
+  <div id="end" class="screen hidden">
+    <div class="brand">وابِل</div>
+    <h1>انْتَهَتِ المُباراةُ!</h1>
+    <div class="big" id="final"></div>
+    <p id="endStars"></p>
+    <p>أَحْسَنْتُمْ يا مُعَلِّقينَ!</p>
+    <button class="btn" id="again">مُباراةٌ جَديدَةٌ</button>
+  </div>
+  <div id="pauseOv" class="hidden">⏸</div>
+  <div id="dbg"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk@1/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js"></script>
+<script>
+(() => {
+// ---------------- setup / scaling ----------------
+const W = 1600, H = 900;
+const stage = document.getElementById('stage');
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+function fit() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  stage.style.width = (W * s) + 'px'; stage.style.height = (H * s) + 'px';
+  stage.style.setProperty('--u', (W * s / 100) + 'px');
+}
+addEventListener('resize', fit); fit();
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const LANG = params.get('lang') || 'ar-SA';
+const CHAINS_PER_HALF = Math.max(1, Math.min(6, +params.get('chains') || 3));
+const CHAL_SECS = Math.max(30, +params.get('secs') || 180);
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ---------------- audio ----------------
+let AC = null, master, crowdGain, muted = false;
+function initAudio() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value = 0.9; master.connect(AC.destination);
+  const buf = noiseBuf(2);
+  const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = .6;
+  crowdGain = AC.createGain(); crowdGain.gain.value = 0;
+  src.connect(bp); bp.connect(crowdGain); crowdGain.connect(master); src.start();
+}
+function noiseBuf(sec) {
+  const b = AC.createBuffer(1, AC.sampleRate * sec, AC.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+function setCrowd(v) { if (AC) crowdGain.gain.setTargetAtTime(v, AC.currentTime, .3); }
+function env(g, t, peak, a, d) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.linearRampToValueAtTime(0, t + a + d); }
+function tone(type, f, t, dur, peak) {
+  const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.value = f;
+  env(g, t, peak, .01, dur); o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + .05); return o;
+}
+const S = {
+  whistle(n = 1) {
+    if (!AC) return; let t = AC.currentTime;
+    for (let i = 0; i < n; i++) {
+      const long = i === n - 1 && n > 1 ? .9 : .35;
+      const o = AC.createOscillator(), g = AC.createGain(), l = AC.createOscillator(), lg = AC.createGain();
+      o.frequency.value = 2900; l.frequency.value = 38; lg.gain.value = 140; l.connect(lg); lg.connect(o.frequency);
+      env(g, t, .18, .02, long); o.connect(g); g.connect(master); o.start(t); l.start(t); o.stop(t + long + .1); l.stop(t + long + .1);
+      t += long + .12;
+    }
+  },
+  kick() {
+    if (!AC) return; const t = AC.currentTime;
+    const o = AC.createOscillator(), g = AC.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + .12);
+    env(g, t, .6, .005, .14); o.connect(g); g.connect(master); o.start(t); o.stop(t + .2);
+  },
+  cheer(dur = 2, peak = .45) {
+    if (!AC) return; const t = AC.currentTime;
+    const s = AC.createBufferSource(); s.buffer = noiseBuf(dur + .2);
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = .5;
+    const g = AC.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + dur * .25); g.gain.linearRampToValueAtTime(0, t + dur);
+    s.connect(bp); bp.connect(g); g.connect(master); s.start(t); s.stop(t + dur + .1);
+  },
+  horn() { if (!AC) return; const t = AC.currentTime; [233, 294, 349].forEach(f => tone('sawtooth', f, t, 1.2, .06)); },
+  buzz() { if (!AC) return; const t = AC.currentTime; tone('square', 140, t, .4, .12); tone('square', 147, t, .4, .12); },
+  ding() { if (!AC) return; const t = AC.currentTime; tone('sine', 988, t, .25, .25); tone('sine', 1319, t + .11, .35, .25); },
+  tick() { if (!AC) return; tone('sine', 1320, AC.currentTime, .12, .15); }
+};
+
+// ---------------- speech recognition ----------------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, micOK = !!SR, accepting = false, recRunning = false, recWanted = false, speaking = false;
+function micUI() { const m = $('mic'); m.className = !micOK ? 'off' : (recRunning && accepting ? 'on' : ''); m.textContent = micOK ? '🎤' : '🚫'; m.title = typeof ENGINE !== 'undefined' ? ENGINE : ''; }
+function initRec() {
+  if (!SR || rec) { micUI(); return; }
+  rec = new SR(); rec.lang = LANG; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
+  rec.onstart = () => { recRunning = true; micUI(); };
+  rec.onend = () => { recRunning = false; micUI(); if (recWanted && micOK) setTimeout(() => { if (recWanted && !recRunning) try { rec.start(); } catch (e) {} }, 150); };
+  rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { micOK = false; recWanted = false; micUI(); } };
+  rec.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i]; const alts = []; for (let j = 0; j < r.length; j++) alts.push(r[j].transcript);
+      onSpeech(alts, r.isFinal);
+    }
+  };
+  micUI();
+}
+// the recognizer keeps running for the whole match (restarting it is what triggers Chrome's permission prompt);
+// between prompts we simply ignore what it hears
+function startRec() { recWanted = true; if (rec && micOK && !recRunning) { try { rec.start(); } catch (e) {} } }
+function stopRec() { recWanted = false; if (rec && recRunning) { try { rec.abort(); } catch (e) {} } }
+function listen(on) {
+  accepting = on;
+  if (ENGINE === 'azure') { if (on) azStart(); else azStop(); micUI(); return; }
+  if (on) startRec(); micUI();
+}
+
+// ---------------- Azure Speech ----------------
+// Azure's regular recognizer (it does not know the expected sentence, so it can't be "talked into" hearing it),
+// then every word of the sentence must appear, in order. In دَرْج mode the whole sentence must arrive as one
+// utterance: Azure only splits speech on a real silence (GAP ms), so a reader who stops mid-sentence starts over.
+const TOKEN_URL = params.get('token') || 'https://wabel-token-14522.azurewebsites.net/api/token';
+const AZ_LANG = params.get('alang') || 'ar-SA';
+const GAP = +params.get('gap') || 1000;
+const VERBS = ['يراوغ', 'يركض', 'يمرر', 'يسدد', 'يركل', 'يعترض', 'ينتزع', 'يعرقل', 'يلوح', 'يهاجم', 'يمسك', 'تصدى', 'تصديا', 'بارعا', 'بقوة', 'الكرة', 'ركنية', 'الحارس', 'صفراء', 'هدف'];
+let ENGINE = 'chrome', azTok = null, azTokAt = 0, azRec = null, azFor = null;
+async function azToken(force) {
+  if (!force && azTok && Date.now() - azTokAt < 8 * 60e3) return azTok;
+  const r = await fetch(TOKEN_URL, { cache: 'no-store' });
+  if (!r.ok) throw new Error('token ' + r.status);
+  azTok = await r.json(); azTokAt = Date.now(); return azTok;
+}
+async function azInit() {
+  if (!window.SpeechSDK || params.get('engine') === 'chrome') return false;
+  try { await azToken(true); ENGINE = 'azure'; micOK = true; micUI(); return true; }
+  catch (e) { console.warn('Azure speech unavailable, using Chrome', e); return false; }
+}
+function azStop() { // keep the recognizer running; just stop listening to it
+  recRunning = !!azRec; micUI();
+}
+async function azStart() { if (!azRec) azBoot(); micUI(); }
+async function azBoot() {
+  if (azRec) return;
+  let t;
+  try { t = await azToken(); }
+  catch (e) { console.warn(e); ENGINE = 'chrome'; initRec(); startRec(); micUI(); return; }
+  const sdk = window.SpeechSDK;
+  const cfg = sdk.SpeechConfig.fromAuthorizationToken(t.token, t.region);
+  cfg.speechRecognitionLanguage = AZ_LANG;
+  cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(DARJ ? GAP : 2500));
+  const rec = new sdk.SpeechRecognizer(cfg, sdk.AudioConfig.fromDefaultMicrophoneInput());
+  try { const pl = sdk.PhraseListGrammar.fromRecognizer(rec); [...NAMES, ...VERBS].forEach(w => pl.addPhrase(w)); } catch (e) {}
+  rec.recognizing = (s, e) => azText(e.result.text, false);
+  rec.recognized = (s, e) => { if (e.result.reason === sdk.ResultReason.RecognizedSpeech) azText(e.result.text, true); };
+  rec.canceled = (s, e) => {
+    console.warn('Azure canceled', e.errorDetails); logEvent('azure-error', String(e.errorDetails || ''));
+    if (e.errorDetails && /auth|401|403|token/i.test(e.errorDetails)) azTok = null;
+    if (azRec === rec) { azRec = null; recRunning = false; micUI(); try { rec.close(); } catch (x) {} if (running) setTimeout(azBoot, 800); }
+  };
+  azRec = rec;
+  rec.startContinuousRecognitionAsync(() => { recRunning = true; micUI(); }, err => console.warn('Azure start', err));
+  clearInterval(azBoot.refresh);
+  azBoot.refresh = setInterval(async () => { try { const n = await azToken(true); if (azRec) azRec.authorizationToken = n.token; } catch (e) {} }, 8 * 60e3);
+}
+function azShutdown() {
+  clearInterval(azBoot.refresh);
+  const r = azRec; azRec = null; recRunning = false;
+  if (r) { try { r.stopContinuousRecognitionAsync(() => r.close(), () => r.close()); } catch (e) {} }
+  micUI();
+}
+function azText(text, final) {
+  if (!cur || cur.done || !accepting || speaking) return;
+  text = (text || '').trim(); if (!text) return;
+  $('heard').textContent = 'سَمِعْتُ: «' + text + '»';
+  // دَرْج: judge this utterance alone; level 1: everything said since the sentence appeared
+  const said = DARJ ? text : [...cur.finals, text].join(' ');
+  const before = cur.pos;
+  cur.pos = align(tokens(norm(said)), cur.units);
+  renderLine();
+  dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
+  if (final || cur.pos >= cur.units.length) logEvent(cur.pos >= cur.units.length ? 'PASS' : 'heard', '«' + text + '» matched ' + cur.pos + '/' + cur.units.length);
+  if (cur.pos >= cur.units.length) { cur.fluentAz = DARJ || cur.finals.length === 0; return success(); }
+  if (!final) { if (cur.pos > before) { S.tick(); setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>'); } return; }
+  cur.finals.push(text);
+  if (DARJ) {
+    const got = cur.pos, wrongAt = cur.units[got] ? cur.units[got].disp : '';
+    const nTok = tokens(norm(text)).length;
+    cur.pos = 0; cur.finals = []; renderLine();
+    if (/[a-z]{2,}/i.test(text)) miss('en');
+    else if (got > 0 && nTok <= got) miss('stop');             // ended early: a pause in the middle
+    else { cur.badWord = wrongAt; miss('word'); }               // read on, but a word was wrong
+  } else if (cur.pos === before) miss(/[a-z]{2,}/i.test(text) ? 'en' : 'wrong');
+  else listenStatus();
+}
+function missWords() {
+  if (cur.unitState) return cur.units.filter((u, i) => cur.unitState[i] !== 'ok').map(u => u.disp);
+  return [nextWord()];
+}
+
+// ---------------- Arabic matching ----------------
+function norm(s) {
+  return s.replace(/[ً-ٰٟـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/ء/g, '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).toLowerCase();
+}
+const NAME_JOIN = [['ما هر', 'ماهر'], ['مه هر', 'ماهر'], ['بر اء', 'برا'], ['بر ا', 'برا'], ['و ليد', 'وليد'], ['خا لد', 'خالد'], ['ا دم', 'ادم']];
+const tokens = nt => NAME_JOIN.reduce((t, [r, w]) => (' ' + t + ' ').split(' ' + r + ' ').join(' ' + w + ' ').trim(), nt).split(/[^ء-يa-z0-9]+/).filter(Boolean);
+const U = { 1: ['واحد', 'احد'], 2: ['اثن', 'اتن', 'ثنين', 'تنين'], 3: ['ثلاث', 'تلات', 'ثلث'], 4: ['اربع'], 5: ['خمس'], 6: ['ست'], 7: ['سبع'], 8: ['ثمان', 'تمان', 'ثمن', 'تمن'], 9: ['تسع'] };
+function numMatch(nt, tk, n) {
+  if (new RegExp('(^|\\D)' + n + '(\\D|$)').test(nt)) return true;
+  const strip = t => t.replace(/^(وال|ال|و|ب)/, '');
+  const has = st => tk.some(t => st.some(s => strip(t).startsWith(s) || t.startsWith(s)));
+  const ten = tk.some(t => /^(ال|و)?عشر/.test(t));
+  if (n <= 9) return has(U[n]) && !ten;
+  if (n === 10) return tk.some(t => /^(ال)?عشر(ه)?$/.test(t));
+  if (n === 20) return tk.some(t => /^(ال)?عشر(ين|ون)/.test(t));
+  const st = n === 11 ? ['احد', 'حدا', 'احدا', 'حداش', 'حدعش'] : U[n - 10];
+  return (has(st) && ten) || tk.some(t => st.some(s => t.includes(s)) && /(تاش|طاش|تعش|طعش)/.test(t));
+}
+function groupMatch(text, g) {
+  const nt = norm(text);
+  if (g.name && nt.includes(norm(g.name))) return true;
+  if (g.num) return numMatch(nt, tokens(nt), g.num);
+  return g.alts.some(a => nt.includes(a));
+}
+const NUMW = ['', 'واحِد', 'اثْنان', 'ثَلاثَة', 'أَرْبَعَة', 'خَمْسَة', 'سِتَّة', 'سَبْعَة', 'ثَمانِيَة', 'تِسْعَة', 'عَشَرَة',
+  'أَحَدَ عَشَرَ', 'اثْنا عَشَرَ', 'ثَلاثَةَ عَشَرَ', 'أَرْبَعَةَ عَشَرَ', 'خَمْسَةَ عَشَرَ', 'سِتَّةَ عَشَرَ', 'سَبْعَةَ عَشَرَ', 'ثَمانِيَةَ عَشَرَ', 'تِسْعَةَ عَشَرَ', 'عِشْرون'];
+const W_ = a => ({ alts: a.map(norm) });
+const N_ = n => ({ num: n });
+const COLOR = { red: 'الأَحْمَرُ', blue: 'الأَزْرَقُ' }, COLOR_G = { red: 'الأَحْمَرِ', blue: 'الأَزْرَقِ' };
+const COLOR_W = { red: ['احمر'], blue: ['ازرق', 'ازرك'] };
+
+// prompt specs: segments [{t, g}] + groups
+const who = p => ({ t: (p.name ? p.name + ' ' : 'اللّاعِبُ ') + 'رَقْمُ ' });
+const PL = p => ({ num: p.num, name: p.name });                       // player: say his name or his number
+const pseg = (p, g, c = 'ُ') => [{ t: p.name ? p.name + ' ' : (c === 'ُ' ? 'اللّاعِبُ ' : c === 'َ' ? 'اللّاعِبَ ' : 'اللّاعِبِ '), g }, { t: 'رَقْم' + c + ' ' }, { t: p.num, g }];
+const P = {
+  start: () => ({ segs: [{ t: 'بَدَأَتِ', g: 0 }, { t: ' ' }, { t: 'المُباراةُ', g: 1 }, { t: '!' }], groups: [W_(['بدا', 'بدت']), W_(['مبار'])] }),
+  second: () => ({ segs: [{ t: 'بَدَأَ', g: 0 }, { t: ' ' }, { t: 'الشَّوْطُ', g: 1 }, { t: ' الثّاني!' }], groups: [W_(['بدا']), W_(['شوط'])] }),
+  half: () => ({ segs: [{ t: 'نِهايَةُ', g: 0 }, { t: ' ' }, { t: 'الشَّوْطِ', g: 1 }, { t: ' الأَوَّلِ!' }], groups: [W_(['نهاي']), W_(['شوط'])] }),
+  end: () => ({ segs: [{ t: 'انْتَهَتِ', g: 0 }, { t: ' المُباراةُ!' }], groups: [W_(['انته'])] }),
+  dribble: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُراوِغُ', g: 0 }, { t: '!' }], groups: [W_(['يراوغ', 'راوغ', 'مراوغ', 'يراوق', 'تراوغ']), PL(p)], nums: [p.num] }),
+  run: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يَرْكُضُ', g: 0 }, { t: ' بِالكُرَةِ!' }], groups: [W_(['يجري', 'جري', 'يركض', 'ركض']), PL(p)], nums: [p.num] }),
+  pass: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُمَرِّرُ', g: 0 }, { t: ' الكُرَةَ!' }], groups: [W_(['يمرر', 'مرر', 'تمرير', 'يمر']), PL(p)], nums: [p.num] }),
+  passTo: (p, r) => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُمَرِّرُ', g: 0 }, { t: ' إِلى ' + (r.name ? r.name + ' ' : '') + 'رَقْمِ ' }, { t: r.num, g: 2 }, { t: '!' }], groups: [W_(['يمرر', 'مرر', 'تمرير', 'يمر']), PL(p), PL(r)], nums: [p.num, r.num] }),
+  shoot: p => ({ segs: [who(p), { t: p.num, g: 1 }, { t: ' ' }, { t: 'يُسَدِّدُ', g: 0 }, { t: '!' }], groups: [W_(['يسدد', 'سدد', 'تسديد', 'يسد']), PL(p)], nums: [p.num] }),
+  intercept: (o, p) => ({ segs: [...pseg(o, 1), { t: ' ' }, { t: 'يَعْتَرِضُ', g: 0 }, { t: ' ' }, ...pseg(p, 2, 'َ'), { t: '!' }], groups: [W_(['يعترض', 'اعترض', 'يعتر', 'اعتراض']), PL(o), PL(p)], nums: [o.num, p.num] }),
+  steal: (o, p) => ({ segs: [...pseg(o, 1), { t: ' ' }, { t: 'يَنْتَزِعُ', g: 0 }, { t: ' الكُرَةَ مِنْ ' }, ...pseg(p, 2, 'ِ'), { t: '!' }], groups: [W_(['ينتزع', 'انتزع', 'ينتز', 'انتز']), PL(o), PL(p)], nums: [o.num, p.num] }),
+  trip: (o, p) => ({ segs: [...pseg(o, 1), { t: ' ' }, { t: 'يُعَرْقِلُ', g: 0 }, { t: ' ' }, ...pseg(p, 2, 'َ'), { t: '!' }], groups: [W_(['يعرقل', 'عرقل', 'عرقله', 'يعرك']), PL(o), PL(p)], nums: [o.num, p.num] }),
+  wave: r => ({ segs: [...pseg(r, 1), { t: ' ' }, { t: 'يُلَوِّحُ', g: 0 }, { t: ' بِيَدِهِ لِيُمَرِّرَ لَهُ الكُرَةَ!' }], groups: [W_(['يلوح', 'لوح', 'بيده', 'يلو']), PL(r)], nums: [r.num] }),
+  kickHard: p => ({ segs: [...pseg(p, 1), { t: ' ' }, { t: 'يَرْكُلُ', g: 0 }, { t: ' الكُرَةَ ' }, { t: 'بِقُوَّةٍ', g: 2 }, { t: '!' }], groups: [W_(['يركل', 'ركل', 'يركُل']), PL(p), W_(['بقوه', 'بقوة', 'قوه'])], nums: [p.num] }),
+  saveWow: () => ({ segs: [{ t: 'كانَ ' }, { t: 'تَصَدِّياً', g: 0 }, { t: ' ' }, { t: 'بارِعاً', g: 1 }, { t: '!' }], groups: [W_(['تصدي', 'تصد']), W_(['بارع'])] }),
+  goal: tm => ({ segs: [{ t: 'هَدَفٌ', g: 0 }, { t: ' هَدَفٌ لِلفَريقِ ' }, { t: COLOR_G[tm], g: 1 }, { t: '!' }], groups: [W_(['هدف']), W_(COLOR_W[tm])] }),
+  save: () => Math.random() < .5
+    ? { segs: [{ t: 'الحارِسُ', g: 0 }, { t: ' ' }, { t: 'يُمْسِكُ', g: 1 }, { t: ' الكُرَةَ!' }], groups: [W_(['حارس']), W_(['يمسك', 'مسك', 'امسك'])] }
+    : { segs: [{ t: 'تَصَدّى', g: 0 }, { t: ' لَها ' }, { t: 'الحارِسُ', g: 1 }, { t: '!' }], groups: [W_(['تصدى', 'تصدي', 'تصد', 'صدها']), W_(['حارس'])] },
+  corner: () => ({ segs: [{ t: 'رَكْلَةٌ ' }, { t: 'رُكْنِيَّةٌ', g: 0 }, { t: '!' }], groups: [W_(['ركني', 'ركنيا'])] }),
+  foul: () => ({ segs: [{ t: 'خَطَأٌ', g: 0 }, { t: ' وَبِطاقَةٌ ' }, { t: 'صَفْراءُ', g: 1 }, { t: '!' }], groups: [W_(['خطا']), W_(['صفرا'])] }),
+  attack: tm => ({ segs: [{ t: 'الفَريقُ ' }, { t: COLOR[tm], g: 1 }, { t: ' ' }, { t: 'يُهاجِمُ', g: 0 }, { t: '!' }], groups: [W_(['يهاجم', 'هاجم', 'هجوم', 'تهاجم']), W_(COLOR_W[tm])] })
+};
+
+// ---------------- prompt card ----------------
+const PRAISE = ['أَحْسَنْتَ!', 'مُمْتازٌ!', 'رائِعٌ!', 'بارَكَ اللهُ فيكَ!', 'صَحيحٌ!'];
+let cur = null, stars = 0, stat = { lines: 0, first: 0, wrong: 0, goals: 0, darj: 0 };
+let DARJ = true; // level 2: the sentence must be read in one flow
+const PREVIEW_MS = 2000;
+function flowBudget(n) { return 2 + 0.9 * n; } // seconds allowed from first word to last
+function flowTick() { // drains the flow bar
+  if (!cur || cur.done || !cur.t0) return;
+  const k = Math.max(0, 1 - (performance.now() - cur.t0) / 1000 / cur.budget);
+  $('flow').firstElementChild.style.transform = 'scaleX(' + k + ')';
+  if (k > 0) requestAnimationFrame(flowTick); else resetSentence();
+}
+function setStatus(cls, html) { const e = $('status'); e.className = cls; e.innerHTML = html; }
+
+// ---- whole-sentence matching: every word must be read, in order ----
+const stripPre = t => t.replace(/^(و|ف)?(ال)?/, '');
+function lev(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const row = [i]; for (let j = 1; j <= n; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = row; }
+  return prev[n];
+}
+function wmatch(tok, key) {
+  if (!tok || !key) return false;
+  if (tok === key) return true;
+  const a = stripPre(tok), b = stripPre(key);
+  if (a === b) return true;
+  if (ENGINE !== 'azure' && a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  const loose = w => { while (w.length > 3 && /[اهيوى]$/.test(w)) w = w.slice(0, -1); return w; };
+  if (a.length >= 3 && b.length >= 3 && loose(a) === loose(b)) return true;
+  if (ENGINE === 'azure') return false;
+  const L = Math.max(a.length, b.length);
+  return L >= 3 && 1 - lev(a, b) / L >= 0.67;
+}
+// compile a prompt into word units (a number is one unit that may take several spoken words, or a digit)
+function compile(spec) {
+  const units = [];
+  spec.segs.forEach(sg => {
+    if (typeof sg.t === 'number') units.push({ num: sg.t, disp: String(sg.t), words: NUMW[sg.t].split(' ').map(norm) });
+    else sg.t.split(/\s+/).forEach(w => { const clean = w.replace(/[!،؟.:]/g, ''); if (clean) units.push({ disp: w, key: norm(clean) }); });
+  });
+  return units;
+}
+function unitMatch(tok, u, sub) { // returns {ok, sub} — sub = progress inside a multi-word number
+  if (u.num !== undefined) {
+    if (/^\d+$/.test(tok)) return { ok: +tok === u.num, sub: 0 };
+    if (u.words.length === 1 && numMatch(tok, [tok], u.num)) return { ok: true, sub: 0 };   // عشرين، تسعه…
+    if (wmatch(tok, u.words[sub])) return sub + 1 === u.words.length ? { ok: true, sub: 0 } : { ok: false, sub: sub + 1, partial: true };
+    return { ok: false, sub };
+  }
+  return { ok: wmatch(tok, u.key), sub: 0 };
+}
+// synonyms / common mishearings for hard words (normalized)
+const ALT = { 'ماهر': ['ماهر', 'ماهير', 'مهر', 'ماهره', 'مهير', 'ماهرا', 'ماهيرا', 'ماهور'], 'ادم': ['ادم', 'ادام', 'اديم', 'ادمي'], 'برا': ['برا', 'براء', 'بره', 'برى', 'براا', 'بارا', 'براه'], 'عمر': ['عمر', 'عمار', 'عمرو', 'عومر', 'عمير'], 'وليد': ['وليد', 'ولييد', 'وليدي', 'وليدو'], 'خالد': ['خالد', 'خاليد', 'خالدي', 'خاليد'], 'خطا': ['خطا', 'خطو', 'خطي'], 'وبطاقه': ['وبطاقه', 'بطاقه'], 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
+function umatch(tok, u) { return wmatch(tok, u.key) || (ALT[u.key] || []).some(k => wmatch(tok, k)); }
+function unitOk(tok, u, sub) { if (u.num !== undefined) return unitMatch(tok, u, sub); return { ok: umatch(tok, u), sub: 0 }; }
+function align(toks, units) {
+  let pos = 0, sub = 0;
+  for (let ti = 0; ti < toks.length; ti++) {
+    const tok = toks[ti];
+    if (pos >= units.length) break;
+    const r = unitOk(tok, units[pos], sub);
+    if (r.ok) { pos++; sub = 0; continue; }
+    if (r.partial) { sub = r.sub; continue; }
+  }
+  return pos;
+}
+function resetSentence() { // level 2: the flow bar ran out — read it again from the start
+  if (!cur || cur.done) return;
+  cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; cur.fluentFinal = false; renderLine();
+  $('flow').firstElementChild.style.transform = 'scaleX(1)';
+  S.buzz(); if (cur.resets >= 2) { cur.wrong++; stat.wrong++; }
+  const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
+  bubble('تَوَقَّفْتَ!', 'bad');
+  setStatus('reset', '⏱ انْتَهى الوَقْتُ! اقْرَأْها دَرْجاً مِنَ البِدايَةِ بِلا تَوَقُّفٍ');
+  showHint();
+  clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2500);
+}
+function nextWord() { return cur && cur.pos < cur.units.length ? cur.units[cur.pos].disp : ''; }
+function listenStatus() {
+  if (!cur || cur.done) return;
+  if (!micOK) return setStatus('off', '🚫 المايك مُغْلَقٌ — المُعَلِّمُ يَحْكُمُ');
+  setStatus('listen', cur.pos ? 'أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>' : (DARJ ? '🎤 اقْرَأْها دَرْجاً… بِلا تَوَقُّفٍ!' : 'أَنا أَسْمَعُكَ… اقْرَأِ الجُمْلَةَ كامِلَةً'));
+}
+function renderLine() {
+  const el = $('line'); el.innerHTML = '';
+  cur.units.forEach((u, i) => {
+    const sp = document.createElement('span');
+    sp.textContent = u.disp;
+    if (u.num !== undefined) sp.classList.add('num');
+    sp.classList.add('kw');
+    if (cur.unitState) { if (cur.unitState[i]) sp.classList.add(cur.unitState[i]); }
+    else { if (i < cur.pos) sp.classList.add('ok'); if (i === cur.pos) sp.classList.add('next'); }
+    el.appendChild(sp); el.appendChild(document.createTextNode(' '));
+  });
+}
+let bubbleT;
+function bubble(txt, cls) {
+  const b = $('bubble'); b.textContent = txt; b.className = 'show ' + (cls || '');
+  clearTimeout(bubbleT); bubbleT = setTimeout(() => b.className = '', 1600);
+}
+function showHint() {
+  const nums = cur.spec.nums || [];
+  if (!nums.length) return;
+  $('hint').innerHTML = nums.map(n => `<span class="num">${n}</span> : ${NUMW[n]}`).join('   ·   ');
+}
+function ask(spec) {
+  return new Promise(res => {
+    if (timeUp) { cur = null; return res(); }
+    cur = { spec, units: compile(spec), pos: 0, wrong: 0, res, done: false, finals: [], lastHit: 0, lastPos: 0, t0: 0, resets: 0 };
+    cur.budget = flowBudget(cur.units.length);
+    cur.ref = []; cur.refOk = new Set(); cur.unitState = null;
+    cur.units.forEach((u, i) => (u.num !== undefined ? NUMW[u.num].split(' ') : [u.disp]).forEach(w => {
+      const raw = w.replace(/[\u064B-\u0652!،؟.:]/g, ''); if (raw) cur.ref.push({ u: i, raw, w: norm(raw) });
+    }));
+    renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
+    $('card').className = cardPos(); $('flow').className = DARJ && ENGINE !== 'azure' ? 'on' : ''; $('flow').firstElementChild.style.transform = 'scaleX(1)';
+    setCrowd(.015);
+    if (DARJ) { // silent preview first, then go
+      setStatus('prep', '👀 اقْرَأْها في سِرِّكَ… اسْتَعِدَّ');
+      const me = cur;
+      setTimeout(() => { if (cur !== me || me.done) return; S.tick(); listen(!paused); listenStatus(); }, PREVIEW_MS);
+    } else { listen(!paused); listenStatus(); }
+  });
+}
+function cardPos() { return focusP && focusP.y > 540 ? 'top' : ''; }
+function success() {
+  if (!cur || cur.done) return;
+  cur.done = true; listen(false);
+  cur.unitState = null; cur.pos = cur.units.length; renderLine();
+  const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
+  const fluent = ENGINE === 'azure' ? !!cur.fluentAz : (secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5));
+  S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
+  stat.lines++; if (cur.wrong === 0) stat.first++; if (fluent) stat.darj++;
+  bubble(fluent ? 'دَرْجٌ مُمْتازٌ! ⭐⭐' : pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
+  $('flow').className = '';
+  setStatus(fluent ? 'darj' : 'ok', fluent ? '🌟 دَرْجٌ مُمْتازٌ! قِراءَةٌ مُتَّصِلَةٌ' : '✔ صَحيحٌ' + (DARJ ? '… حاوِلْ أَسْرَعَ بِلا تَوَقُّفٍ' : '!') + (cur.wrong === 0 && !DARJ ? ' مِنْ أَوَّلِ مَرَّةٍ ⭐' : ''));
+  const r = cur.res;
+  setTimeout(() => { $('card').className = 'hidden ' + cardPos(); cur = null; setCrowd(.1); r(); }, 1300);
+}
+function miss(kind) {
+  if (!cur || cur.done) return;
+  cur.wrong++; stat.wrong++; S.buzz();
+  const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
+  bubble(kind === 'en' ? 'بِالعَرَبِيَّةِ مِنْ فَضْلِكَ!' : kind === 'stop' ? 'تَوَقَّفْتَ!' : 'حاوِلْ مَرَّةً أُخْرى!', 'bad');
+  if (kind === 'word') setStatus('bad', '✘ كَلِمَةٌ غَيْرُ صَحيحَةٍ: <span class="miss">' + cur.badWord + '</span> — اقْرَأِ الجُمْلَةَ مِنَ البِدايَةِ');
+  else if (kind === 'stop') setStatus('reset', '⏸ تَوَقَّفْتَ قَبْلَ نِهايَةِ الجُمْلَةِ! اقْرَأْها كامِلَةً دَرْجاً مِنَ البِدايَةِ');
+  else if (kind === 'part') setStatus('bad', '✘ اقْرَأِ الجُمْلَةَ كامِلَةً دَرْجاً. انْتَبِهْ: <span class="miss">' + missWords().join(' … ') + '</span>');
+  else setStatus('bad', '✘ ' + (kind === 'en' ? 'سَمِعْتُ إنجليزيّة!' : 'لَمْ أَسْمَعْها صَحيحَةً.') + ' قُلْ: <span class="miss">' + nextWord() + '</span>');
+  clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2200);
+  if (cur.wrong >= 1) showHint();
+  if (cur.wrong >= 3 && cur.wrong % 2 === 1) speakLine();
+}
+const LOG = [];
+function logEvent(kind, detail) {
+  const exp = cur ? cur.units.map(u => u.disp).join(' ') : '';
+  LOG.push(new Date().toLocaleTimeString() + ' | ' + kind + ' | expected: ' + exp + (detail ? ' | ' + detail : ''));
+  if (LOG.length > 500) LOG.shift();
+}
+function downloadLog() {
+  const blob = new Blob(['engine: ' + ENGINE + ' | level: ' + (DARJ ? 'darj' : '1') + ' | ' + navigator.userAgent + '\n\n' + LOG.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'wabel-soccer-log.txt'; a.click();
+}
+const dbgLines = [];
+function dbg(cls, txt) { dbgLines.push(`<span class="${cls}">${txt}</span>`); if (dbgLines.length > 14) dbgLines.shift(); $('dbg').innerHTML = dbgLines.join('<br>'); console.log('[SR]', txt); }
+function onSpeech(alts, final) {
+  if (!cur || cur.done || paused || !accepting || speaking || !micOK) return;
+  const text = (alts[0] || '').trim();
+  const latin = /[a-z]{2,}/i.test(text);
+  if (text) $('heard').textContent = latin ? '' : 'سَمِعْتُ: «' + text + '»';
+  // everything heard since this prompt started, so a sentence read in pieces still counts
+  const before = cur.pos;
+  let best = before;
+  for (const a of [[...cur.finals, text].join(' '), ...alts]) best = Math.max(best, align(tokens(norm(a)), cur.units));
+  cur.pos = best;
+  if (final && align(tokens(norm(text)), cur.units) >= cur.units.length) cur.fluentFinal = true;
+  const newHit = cur.pos > before;
+  if (newHit && !cur.t0) { cur.t0 = performance.now(); if (DARJ) flowTick(); }
+  dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
+  renderLine();
+  if (cur.pos >= cur.units.length) return success();
+  if (newHit) {
+    cur.lastHit = performance.now(); S.tick(); clearTimeout(cur.stT);
+    setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>');
+  }
+  if (final && text) {
+    cur.finals.push(text); if (cur.finals.length > 4) cur.finals.shift();
+    const advanced = cur.pos > cur.lastPos; cur.lastPos = cur.pos;
+    const recentHit = performance.now() - cur.lastHit < 2500;
+    if (!advanced && !recentHit) miss(latin ? 'en' : 'wrong');
+    else if (!newHit) listenStatus();
+  }
+}
+function speakLine() {
+  if (!('speechSynthesis' in window) || !cur) return;
+  const v = speechSynthesis.getVoices().find(v => /^ar/i.test(v.lang));
+  if (!v) return;
+  const txt = cur.spec.segs.map(s => typeof s.t === 'number' ? NUMW[s.t] : s.t).join('');
+  const u = new SpeechSynthesisUtterance(txt); u.voice = v; u.lang = v.lang; u.rate = .85;
+  speaking = true;
+  u.onend = u.onerror = () => setTimeout(() => { speaking = false; }, 400);
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+// ---------------- game world ----------------
+const GOAL = { red: 1560, blue: 40 };           // goal each team ATTACKS
+const DIR = { red: 1, blue: -1 };
+const other = t => t === 'red' ? 'blue' : 'red';
+const COL = { red: '#e63946', blue: '#1d6fd8', redGK: '#ffb703', blueGK: '#2ec4b6' };
+const FORM = [[110, 450, true], [380, 450], [690, 280], [690, 620]];
+const NAMES = (params.get('names') || 'خالد,آدم,وليد,ماهر,براء,عمر').split(/[,،]/).map(x => x.trim()).filter(Boolean);
+const SKIN = ['#f1c27d', '#e0ac69', '#c68642', '#a8693a', '#ffdbac', '#d19a66'];
+const HAIR = ['#2b1b0e', '#1a1a1a', '#4a2c17', '#6b3e1f', '#111'];
+let players = [], ball, holder, setpiece = null, score, T = 0, paused = false, netShake = { red: 0, blue: 0 }, parts = [], focusP = null;
+
+function newWorld() {
+  const pool = []; for (let i = 2; i <= 20; i++) pool.push(i);
+  pool.sort(() => Math.random() - .5);
+  players = [];
+  const names = [...NAMES].sort(() => Math.random() - .5); let ni = 0;
+  ['red', 'blue'].forEach(team => FORM.forEach(([x, y, gk], i) => {
+    const hx = team === 'red' ? x : W - x;
+    players.push({ team, gk: !!gk, num: gk ? 1 : pool.pop(), name: gk ? '' : (names[ni++] || ''), hx, hy: y, x: hx, y, lx: hx, ly: y, spd: 0, phase: Math.random() * 6,
+      skin: pick(SKIN), hair: pick(HAIR), curly: Math.random() < .35, ctrl: false, fallen: false, face: DIR[team], kickT: 0, seed: Math.random() * 10, idx: i });
+  }));
+  ball = { x: 800, y: 450, z: 0, free: true };
+  holder = null; setpiece = null; score = { red: 0, blue: 0 }; parts = []; stars = 0;
+  $('stars').textContent = '⭐ 0'; updScore();
+}
+const team = t => players.filter(p => p.team === t);
+const keeper = t => players.find(p => p.team === t && p.gk);
+const mid = t => players.find(p => p.team === t && p.idx === 2);
+function updScore() { $('sr').textContent = score.red; $('sb').textContent = score.blue; }
+
+// tweens (pause-aware)
+let anims = [];
+const ease = k => k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+function anim(dur, fn, e = ease) { return new Promise(res => anims.push({ t: 0, dur, fn, e, res })); }
+const wait = s => anim(s, () => {});
+function moveTo(p, x, y, dur) {
+  const sx = p.x, sy = p.y; p.ctrl = true;
+  return anim(dur, k => { p.x = sx + (x - sx) * k; p.y = sy + (y - sy) * k; }).then(() => { p.ctrl = false; });
+}
+function kickBall(tx, ty, dur, arc = 0, target = null) {
+  ball.free = true; const sx = ball.x, sy = ball.y; S.kick(); if (holder) { holder.kickT = .55; holder.face = DIR[holder.team]; }
+  return anim(dur, k => {
+    const ex = target ? target.x + DIR[target.team] * 16 : tx, ey = target ? target.y + 6 : ty;
+    ball.x = sx + (ex - sx) * k; ball.y = sy + (ey - sy) * k; ball.z = Math.sin(k * Math.PI) * arc;
+  }, k => k);
+}
+function giveBall(p) { holder = p; ball.free = false; ball.z = 0; }
+function fwdX(p, x) { return p.team === 'red' ? Math.min(x, 1250) : Math.max(x, 350); }
+
+function update(dt) {
+  T += dt; tickTimer(dt);
+  for (let i = anims.length - 1; i >= 0; i--) {
+    const a = anims[i]; a.t += dt; const k = Math.min(1, a.t / a.dur); a.fn(a.e(k));
+    if (k >= 1) { anims.splice(i, 1); a.res(); }
+  }
+  // AI
+  let presser = null;
+  if (holder && !setpiece) {
+    let best = 1e9;
+    players.forEach(p => { if (p.team !== holder.team && !p.gk) { const d = Math.hypot(p.x - ball.x, p.y - ball.y); if (d < best) { best = d; presser = p; } } });
+  }
+  players.forEach(p => {
+    if (p === holder || p.ctrl) return;
+    const d = DIR[p.team]; let tx, ty, sp = 170;
+    if (p.gk) { tx = p.hx; ty = clamp(450 + (ball.y - 450) * .35, 400, 500); sp = 120; }
+    else if (setpiece) {
+      const gx = GOAL[setpiece], dd = DIR[setpiece];
+      if (p.team === setpiece) { tx = gx - dd * (130 + p.idx * 38); ty = 330 + p.idx * 55; }
+      else { tx = gx - dd * (70 + p.idx * 30); ty = 360 + p.idx * 45; }
+      ty += Math.sin(T + p.seed) * 12;
+    } else {
+      const att = holder && holder.team === p.team;
+      tx = p.hx + (ball.x - 800) * .6 + (att ? d * 90 : -d * 20);
+      ty = p.hy + (ball.y - 450) * .25 + Math.sin(T * .8 + p.seed) * 20;
+      if (p === presser) { tx = ball.x - d * 55; ty = ball.y + 8; sp = 210; }
+    }
+    tx = clamp(tx, 70, 1530); ty = clamp(ty, 70, 830);
+    const dx = tx - p.x, dy = ty - p.y, dist = Math.hypot(dx, dy);
+    if (dist > 1) { const m = Math.min(dist, sp * dt); p.x += dx / dist * m; p.y += dy / dist * m; }
+  });
+  players.forEach(p => {
+    const v = Math.hypot(p.x - p.lx, p.y - p.ly) / Math.max(dt, 1e-3);
+    const vx = p.x - p.lx; if (Math.abs(vx) > 0.6 * dt * 60) p.face = vx > 0 ? 1 : -1;
+    if (p.kickT > 0) p.kickT -= dt;
+    p.spd = p.spd * .8 + v * .2; p.lx = p.x; p.ly = p.y;
+    if (p.spd > 8) p.phase += dt * (5 + p.spd / 25);
+  });
+  if (!ball.free && holder) { ball.x = holder.x + DIR[holder.team] * 16; ball.y = holder.y + 6; ball.z = 0; }
+  for (const k in netShake) netShake[k] = Math.max(0, netShake[k] - dt * 1.2);
+  parts.forEach(q => { q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 300 * dt; q.life -= dt; q.r += q.vr * dt; });
+  parts = parts.filter(q => q.life > 0);
+}
+function confetti(x, y, color) {
+  for (let i = 0; i < 90; i++) parts.push({ x, y, vx: rand(-420, 420), vy: rand(-620, -150), life: rand(1.2, 2.4), c: Math.random() < .5 ? color : pick(['#fff', '#ffd166']), r: rand(0, 6), vr: rand(-8, 8) });
+}
+
+// ---------------- drawing ----------------
+// ---- HD assets ----
+const IMG = {};
+['red_run1','red_run2','red_kick','red_gk','blue_run1','blue_run2','blue_kick','blue_gk'].forEach(n => { const i = new Image(); i.src = 'assets/' + n + '.png?v=1'; IMG[n] = i; });
+const PITCH = new Image(); PITCH.src = 'assets/pitch.jpg?v=1';
+const ok = i => i && i.complete && i.naturalWidth > 0;
+// grass rectangle inside pitch.jpg (image px) -> game pitch 40..1560 x 40..860
+const GR = { x: 195, y: 65, w: 985, h: 635 };
+function drawField() {
+  if (ok(PITCH)) {
+    const sx = 1520 / GR.w, sy = 820 / GR.h;
+    ctx.save(); ctx.translate(40, 40); ctx.scale(sx, sy); ctx.translate(-GR.x, -GR.y);
+    ctx.drawImage(PITCH, 0, 0); ctx.restore();
+    // soft vignette / floodlight glow
+    const g = ctx.createRadialGradient(800, 450, 300, 800, 450, 1000);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.35)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  } else { for (let i = 0; i < 12; i++) { ctx.fillStyle = i % 2 ? '#2f9446' : '#35a04d'; ctx.fillRect(i * W / 12, 0, W / 12 + 1, H); } }
+  ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 4;
+  ctx.strokeRect(40, 40, 1520, 820);
+  ctx.beginPath(); ctx.moveTo(800, 40); ctx.lineTo(800, 860); ctx.stroke();
+  ctx.beginPath(); ctx.arc(800, 450, 95, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(800, 450, 5, 0, 7); ctx.fill();
+  [[40, 1], [1560, -1]].forEach(([x, s]) => {
+    ctx.strokeRect(s > 0 ? x : x - 230, 220, 230, 460);
+    ctx.strokeRect(s > 0 ? x : x - 85, 340, 85, 220);
+    ctx.beginPath(); ctx.arc(x + s * 170, 450, 5, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + s * 170, 450, 95, s > 0 ? -0.93 : Math.PI - 0.93, s > 0 ? 0.93 : Math.PI + 0.93); ctx.stroke();
+  });
+  // goals + nets
+  [['blue', 40, -1], ['red', 1560, 1]].forEach(([t, x, s]) => {
+    const sh = Math.sin(T * 40) * netShake[t] * 6;
+    ctx.save(); ctx.translate(sh * s, 0);
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(s > 0 ? x : x - 34, 388, 34, 124);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i <= 8; i++) { ctx.beginPath(); ctx.moveTo(s > 0 ? x : x - 34, 388 + i * 15.5); ctx.lineTo(s > 0 ? x + 34 : x, 388 + i * 15.5); ctx.stroke(); }
+    for (let i = 0; i <= 4; i++) { const xx = (s > 0 ? x : x - 34) + i * 8.5; ctx.beginPath(); ctx.moveTo(xx, 388); ctx.lineTo(xx, 512); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = '#f4f4f4'; ctx.lineWidth = 8; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(x, 386); ctx.lineTo(x + s * 34, 386); ctx.lineTo(x + s * 34, 514); ctx.lineTo(x, 514); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + s * 34, 386); ctx.lineTo(x + s * 34, 514); ctx.stroke();
+  });
+}
+function line(x1, y1, x2, y2, c, w) { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+const PH = 150; // sprite height in px
+function drawPlayer(p) {
+  ctx.save(); ctx.translate(p.x, p.y);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 3, 26, 9, 0, 0, 7); ctx.fill();
+  if (p === focusP) {
+    const b = Math.sin(T * 6);
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 3, 40 + b * 4, 15 + b * 1.5, 0, 0, 7); ctx.stroke();
+    const ay = -PH - 18 + b * 6;
+    ctx.fillStyle = '#ffd166'; ctx.strokeStyle = '#7a5b00'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-14, ay - 18); ctx.lineTo(14, ay - 18); ctx.lineTo(0, ay); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  if (p.fallen) ctx.rotate(p.team === 'red' ? -1.35 : 1.35);
+  const run = clamp(p.spd / 140, 0, 1);
+  let key = p.gk ? 'gk' : (p.kickT > 0 ? 'kick' : (Math.floor(p.phase / Math.PI) % 2 ? 'run2' : 'run1'));
+  if (!p.gk && !(p.kickT > 0) && run < .08) key = 'run1';
+  const img = IMG[p.team + '_' + key];
+  const face = p.kickT > 0 ? DIR[p.team] : p.face;
+  if (ok(img)) {
+    const h = PH, w = img.naturalWidth / img.naturalHeight * h;
+    const bob = run > .1 && !p.fallen ? Math.abs(Math.sin(p.phase)) * 3 : 0;
+    ctx.save(); if (face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w / 2, -h - bob, w, h); ctx.restore();
+    // name + number on the back of the shirt
+    if (!p.fallen && p.kickT <= 0) {
+      const ink = p.gk ? '#111' : '#fff';
+      ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 3;
+      const cx = face < 0 ? -1 : 1; // body is slightly left of center in the sprites
+      if (p.name) {
+        let fs = 13; ctx.font = `800 ${fs}px Cairo, sans-serif`;
+        while (ctx.measureText(p.name).width > 40 && fs > 8) { fs -= .5; ctx.font = `800 ${fs}px Cairo, sans-serif`; }
+        ctx.fillText(p.name, cx, -h * .74 - bob);
+        ctx.font = '800 20px Cairo, sans-serif'; ctx.fillText(p.num, cx, -h * .60 - bob);
+      } else { ctx.font = '800 22px Cairo, sans-serif'; ctx.fillText(p.num, cx, -h * .64 - bob); }
+    }
+  } else { // fallback stick figure
+    ctx.fillStyle = p.gk ? COL[p.team + 'GK'] : COL[p.team]; ctx.fillRect(-16, -100, 32, 60);
+    ctx.fillStyle = '#f1c27d'; ctx.beginPath(); ctx.arc(0, -115, 14, 0, 7); ctx.fill();
+  }
+  if (p.waving && !p.fallen) { const wy = -PH - 30 + Math.sin(T * 9) * 6; ctx.font = '40px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✋', 30, wy); }
+  ctx.restore();
+}
+function drawBall() {
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(ball.x + 3, ball.y + 8, 11 - ball.z * .04, 5 - ball.z * .02, 0, 0, 7); ctx.fill();
+  const y = ball.y - ball.z, r = 11;
+  const g = ctx.createRadialGradient(ball.x - 4, y - 4, 2, ball.x, y, r);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(.75, '#e6e6e6'); g.addColorStop(1, '#8a8a8a');
+  ctx.fillStyle = g; ctx.strokeStyle = '#333'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(ball.x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(ball.x, y, 3.6, 0, 7); ctx.fill();
+  for (let i = 0; i < 5; i++) { const a = T * 4 + i * 1.256; ctx.beginPath(); ctx.arc(ball.x + Math.cos(a) * 7.2, y + Math.sin(a) * 7.2, 2, 0, 7); ctx.fill(); }
+}
+function draw() {
+  drawField();
+  [...players, { isBall: true, y: ball.y + 4 }].sort((a, b) => a.y - b.y).forEach(o => o.isBall ? drawBall() : drawPlayer(o));
+  parts.forEach(q => { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.fillStyle = q.c; ctx.fillRect(-5, -3, 10, 6); ctx.restore(); });
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (!paused) update(dt);
+  draw(); requestAnimationFrame(frame);
+}
+
+// ---------------- match actions ----------------
+async function resetPositions(kickTeam) {
+  holder = null; setpiece = null; focusP = null;
+  const k = mid(kickTeam);
+  await Promise.all([
+    ...players.map(p => p === k ? moveTo(p, 800 - DIR[kickTeam] * 18, 450, .9) : moveTo(p, p.hx, p.hy, .9)),
+    anim(.9, (s => e => { ball.x = s.x + (800 - s.x) * e; ball.y = s.y + (450 - s.y) * e; ball.z = 0; })({ x: ball.x, y: ball.y }))
+  ]);
+  giveBall(k);
+}
+function receiver(p) {
+  const mates = team(p.team).filter(q => q !== p && !q.gk).sort((a, b) => (b.x - a.x) * DIR[p.team]);
+  return pick(mates.slice(0, 2));
+}
+function nearestOpp(p) {
+  return team(other(p.team)).filter(q => !q.gk).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+}
+
+const EV = {
+  async kickoff(e) {
+    await resetPositions(e.team); S.whistle(1); await wait(.5);
+    focusP = holder;
+    await ask(e.second ? P.second() : P.start());
+    focusP = null;
+    const fi = Math.random() < .5 ? 3 : 1, r = players.find(p => p.team === e.team && p.idx === fi);
+    await kickBall(0, 0, .6, 0, r); giveBall(r);
+  },
+  async attack() {
+    const p = holder, tm = p.team;
+    await moveTo(p, fwdX(p, p.x + DIR[tm] * 170), clamp(p.y + rand(-60, 60), 150, 750), 1.2);
+    await ask(P.attack(tm));
+  },
+  async dribble() {
+    const p = holder, d = DIR[p.team], zig = p.y > 450 ? -65 : 65;
+    await moveTo(p, fwdX(p, p.x + d * 110), clamp(p.y + zig, 120, 780), .9);
+    focusP = p; await ask(P.dribble(p)); focusP = null;
+    await moveTo(p, fwdX(p, p.x + d * 140), clamp(p.y - zig * .7, 120, 780), .6);
+  },
+  async run() {
+    const p = holder, d = DIR[p.team];
+    await moveTo(p, fwdX(p, p.x + d * 240), clamp(p.y + rand(-40, 40), 120, 780), 1.4);
+    focusP = p; await ask(P.run(p)); focusP = null;
+  },
+  async pass(e) {
+    const p = holder, r = receiver(p);
+    await moveTo(p, fwdX(p, p.x + DIR[p.team] * 40), p.y, .4);
+    focusP = p; await ask(e.to ? P.passTo(p, r) : P.pass(p)); focusP = null;
+    r.ctrl = true; await kickBall(0, 0, .8, 25, r); r.ctrl = false; giveBall(r);
+  },
+  async steal(e) {
+    const p = holder, o = nearestOpp(p), d = DIR[p.team];
+    await moveTo(o, p.x + d * 40, p.y + 4, .6);
+    o.ctrl = true; focusP = o;
+    await ask(e.kind === 'intercept' ? P.intercept(o, p) : P.steal(o, p));
+    focusP = null; o.ctrl = false; giveBall(o);
+    await moveTo(o, fwdX(o, o.x + DIR[o.team] * 120), clamp(o.y + rand(-50, 50), 120, 780), .7);
+  },
+  async wave() {
+    const p = holder, r = receiver(p);
+    const tx = fwdX(r, p.x + DIR[p.team] * 220), ty = clamp(p.y + (p.y > 450 ? -200 : 200), 120, 780);
+    await moveTo(r, tx, ty, 1);
+    r.ctrl = true; r.waving = true; focusP = r;
+    await ask(P.wave(r));
+    focusP = null; r.waving = false;
+    await wait(.2); await kickBall(0, 0, .8, 25, r); r.ctrl = false; giveBall(r);
+  },
+  async foul() {
+    const p = holder, o = nearestOpp(p);
+    await moveTo(o, p.x - DIR[p.team] * 26, p.y + 6, .55);
+    o.ctrl = true; p.fallen = true; S.kick(); S.whistle(1); S.cheer(1, .2);
+    focusP = o; await ask(P.trip(o, p)); focusP = null;
+    $('ycard').className = 'show';
+    await ask(P.foul());
+    $('ycard').className = ''; p.fallen = false;
+    await moveTo(o, o.x - DIR[p.team] * 70, o.y + 40, .5);
+  },
+  async foulOld() {
+    const p = holder, o = nearestOpp(p);
+    await moveTo(o, p.x - DIR[p.team] * 26, p.y + 6, .55);
+    o.ctrl = true; p.fallen = true; S.kick(); S.whistle(1); S.cheer(1, .2);
+    $('ycard').className = 'show';
+    await ask(P.foul());
+    $('ycard').className = ''; p.fallen = false;
+    await moveTo(o, o.x - DIR[p.team] * 70, o.y + 40, .5);
+  },
+  async shot(e) {
+    const p = holder, tm = p.team, d = DIR[tm], gx = GOAL[tm];
+    if (Math.abs(gx - p.x) > 380) {
+      const tx = gx - d * 300, ty = clamp(p.y, 320, 580);
+      await moveTo(p, tx, ty, clamp(Math.hypot(tx - p.x, ty - p.y) / 420, .5, 2));
+    } else await wait(.3);
+    focusP = p; await ask(e.hard ? P.kickHard(p) : P.shoot(p)); focusP = null;
+    const K = keeper(other(tm)); K.ctrl = true;
+    if (e.outcome === 'goal') {
+      const low = K.y < 450, ty = low ? rand(470, 500) : rand(400, 430);
+      moveTo(K, K.x, low ? 405 : 495, .45).then(() => K.ctrl = true);
+      await kickBall(gx + d * 20, ty, .55, 20);
+      netShake[tm] = 1; score[tm]++; updScore(); S.horn(); S.cheer(3, .55); confetti(gx - d * 40, 450, COL[tm]);
+      holder = null; K.ctrl = false;
+    } else if (e.outcome === 'save') {
+      const ty = rand(405, 495);
+      moveTo(K, gx - d * 8, ty, .4).then(() => K.ctrl = true);
+      await kickBall(gx - d * 22, ty, .45, 15);
+      giveBall(K); S.cheer(1.2, .3); K.ctrl = true;
+    } else { // corner
+      const ty = rand(405, 495), cy = ty < 450 ? 48 : 852;
+      moveTo(K, gx - d * 8, ty, .4).then(() => K.ctrl = true);
+      await kickBall(gx - d * 22, ty, .45, 15);
+      await kickBall(gx, cy, .7, 40);
+      K.ctrl = false; holder = null; ball.cornerY = cy; ball.cornerTeam = tm; S.cheer(1, .25);
+    }
+    if (e.outcome !== 'corner') setpiece = null;
+  },
+  async goal() {
+    const tm = ball.x > 800 ? 'red' : 'blue';
+    await wait(1.4);
+    await ask(P.goal(tm));
+    await resetPositions(other(tm)); S.whistle(1); await wait(.6);
+    const r = players.find(p => p.team === other(tm) && p.idx === 3);
+    await kickBall(0, 0, .6, 0, r); giveBall(r);
+  },
+  async save() {
+    const K = holder; focusP = K;
+    await ask(P.save());
+    if (Math.random() < .5) { S.cheer(1.5, .35); await ask(P.saveWow()); }
+    focusP = null;
+    await wait(.3);
+    const r = team(K.team).filter(q => !q.gk).sort((a, b) => Math.hypot(a.x - K.x, a.y - K.y) - Math.hypot(b.x - K.x, b.y - K.y))[0];
+    r.ctrl = true; await kickBall(0, 0, .9, 60, r); r.ctrl = false; giveBall(r); K.ctrl = false;
+  },
+  async corner() {
+    const tm = ball.cornerTeam, cy = ball.cornerY, gx = GOAL[tm], d = DIR[tm];
+    setpiece = tm;
+    const taker = team(tm).filter(q => !q.gk).sort((a, b) => Math.hypot(a.x - gx, a.y - cy) - Math.hypot(b.x - gx, b.y - cy))[0];
+    await moveTo(taker, gx - d * 12, cy, 1.3);
+    giveBall(taker); taker.ctrl = true;
+    await wait(.6);
+    await ask(P.corner());
+    const r = team(tm).filter(q => q !== taker && !q.gk).sort((a, b) => Math.hypot(a.x - (gx - d * 140), a.y - 450) - Math.hypot(b.x - (gx - d * 140), b.y - 450))[0];
+    r.ctrl = true; await kickBall(0, 0, 1, 90, r); r.ctrl = false; taker.ctrl = false; giveBall(r);
+  },
+  async halftime() {
+    S.whistle(2); await wait(.5);
+    holder = null;
+    await Promise.all(players.map(p => moveTo(p, p.hx, p.hy, 1.2)));
+    await ask(P.half());
+  },
+  async end() {
+    S.whistle(3); holder = null; S.cheer(3, .4);
+    await wait(1);
+    await ask(P.end());
+  }
+};
+
+// ---------------- plan ----------------
+function buildPlan() {
+  const plan = [{ k: 'kickoff', team: 'red' }];
+  const chainTeams = [];
+  for (let h = 0; h < 2; h++) for (let c = 0; c < CHAINS_PER_HALF; c++) chainTeams.push({ h, team: (c % 2 === 0) === (h === 0) ? 'red' : 'blue' });
+  // outcomes: guarantee each team scores at least once
+  const outs = chainTeams.map(() => { const r = Math.random(); return r < .38 ? 'goal' : r < .72 ? 'save' : 'corner'; });
+  ['red', 'blue'].forEach(t => {
+    const idx = chainTeams.map((c, i) => c.team === t ? i : -1).filter(i => i >= 0);
+    if (!idx.some(i => outs[i] === 'goal')) outs[pick(idx)] = 'goal';
+  });
+  chainTeams.forEach((c, i) => {
+    if (c.h === 1 && i === CHAINS_PER_HALF) { plan.push({ k: 'halftime' }, { k: 'kickoff', team: 'blue', second: true }); }
+    const moves = [];
+    if (Math.random() < .35) moves.push({ k: 'attack' });
+    const n = Math.random() < .6 ? 1 : 2; let prev = null;
+    for (let j = 0; j < n; j++) {
+      let k; do { k = pick(['dribble', 'run', 'pass']); } while (k === prev); prev = k;
+      moves.push({ k, to: k === 'pass' && c.h === 1 && Math.random() < .6 });
+    }
+    const r2 = Math.random();
+    if (r2 < .3) moves.splice(1 + Math.floor(Math.random() * moves.length), 0, { k: 'foul' });
+    else if (r2 < .55) moves.push({ k: 'steal', kind: Math.random() < .5 ? 'intercept' : 'steal' }, { k: 'dribble' });
+    if (Math.random() < .35) moves.splice(Math.max(0, moves.length - 1), 0, { k: 'wave' });
+    plan.push(...moves);
+    const o = outs[i];
+    if (o === 'corner') {
+      plan.push({ k: 'shot', outcome: 'corner' }, { k: 'corner' });
+      const o2 = Math.random() < .5 ? 'goal' : 'save';
+      plan.push({ k: 'shot', outcome: o2, hard: Math.random() < .5 }, { k: o2 });
+    } else plan.push({ k: 'shot', outcome: o, hard: Math.random() < .5 }, { k: o });
+  });
+  if (CHAINS_PER_HALF * 2 === chainTeams.length && !plan.some(e => e.k === 'halftime')) plan.push({ k: 'halftime' });
+  plan.push({ k: 'end' });
+  return plan;
+}
+
+let running = false, challenge = false, timeUp = false, chalLeft = 0, chalName = '';
+function cancelAsk() { if (!cur || cur.done) return; cur.done = true; listen(false); const r = cur.res; $('card').className = 'hidden'; $('flow').className = ''; cur = null; r(); }
+function fmtT(t) { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
+function tickTimer(dt) {
+  if (!challenge || !running || timeUp) return;
+  chalLeft -= dt; const el = $('timer'); el.textContent = fmtT(chalLeft); el.className = 'on' + (chalLeft < 30 ? ' low' : '');
+  if (chalLeft <= 0) { timeUp = true; S.whistle(3); cancelAsk(); }
+}
+function chalChain() {
+  const moves = [];
+  if (Math.random() < .3) moves.push({ k: 'attack' });
+  const n = Math.random() < .5 ? 1 : 2; let prev = null;
+  for (let j = 0; j < n; j++) { let k; do { k = pick(['dribble', 'run', 'pass']); } while (k === prev); prev = k; moves.push({ k, to: k === 'pass' && Math.random() < .5 }); }
+  const r2 = Math.random();
+  if (r2 < .2) moves.splice(1 + Math.floor(Math.random() * moves.length), 0, { k: 'foul' });
+  else if (r2 < .4) moves.push({ k: 'steal', kind: Math.random() < .5 ? 'intercept' : 'steal' }, { k: 'dribble' });
+  if (Math.random() < .3) moves.splice(Math.max(0, moves.length - 1), 0, { k: 'wave' });
+  const o = Math.random() < .7 ? 'goal' : 'save';
+  moves.push({ k: 'shot', outcome: o, hard: Math.random() < .5 }, { k: o });
+  return moves;
+}
+async function runChallenge() {
+  running = true; challenge = true; timeUp = false; chalLeft = CHAL_SECS; stat = { lines: 0, first: 0, wrong: 0, goals: 0, darj: 0 };
+  newWorld(); setCrowd(.1); $('clock').style.display = 'none'; $('timer').className = 'on'; $('timer').textContent = fmtT(chalLeft);
+  await EV.kickoff({ team: 'red' });
+  while (!timeUp) {
+    for (const e of chalChain()) {
+      if (timeUp) break;
+      const g = score.red + score.blue;
+      await EV[e.k](e);
+      if (score.red + score.blue > g) stat.goals++;
+      await wait(.3);
+    }
+  }
+  setCrowd(0); running = false; challenge = false; stopRec(); azShutdown(); $('timer').className = ''; $('clock').style.display = '';
+  const total = stat.goals * 50 + stat.lines * 10 + stat.first * 5 + stat.darj * 10;
+  BOARD.push({ name: chalName || ('لاعب ' + (BOARD.length + 1)), goals: stat.goals, lines: stat.lines, darj: stat.darj, wrong: stat.wrong, total });
+  renderBoard($('board'), BOARD.length - 1);
+  $('chalTitle').textContent = 'انْتَهى الوَقْتُ' + (chalName ? ' يا ' + chalName : '') + '!';
+  $('result').innerHTML = `<span>⚽ الأَهْدافُ</span><b>${stat.goals}</b><span>✔ الجُمَلُ الصَّحيحَةُ</span><b>${stat.lines}</b><span>⭐ مِنْ أَوَّلِ مَرَّةٍ</span><b>${stat.first}</b><span>🌟 قِراءَةٌ دَرْجاً</span><b>${stat.darj}</b><span>✘ المُحاوَلاتُ الخاطِئَةُ</span><b>${stat.wrong}</b><div class="total">النَّتيجَةُ: <b>${total}</b></div>`;
+  $('chalEnd').className = 'screen';
+}
+async function runMatch() {
+  running = true; challenge = false; timeUp = false; newWorld(); stat = { lines: 0, first: 0, wrong: 0, goals: 0, darj: 0 };
+  const plan = buildPlan();
+  const hIdx = plan.findIndex(e => e.k === 'halftime'), E = plan.length;
+  setCrowd(.1);
+  for (let i = 0; i < E; i++) {
+    const m = i <= hIdx ? Math.round(45 * i / hIdx) : 45 + Math.round(45 * (i - hIdx) / (E - 1 - hIdx));
+    $('clock').textContent = m + "'";
+    await EV[plan[i].k](plan[i]);
+    await wait(.3);
+  }
+  setCrowd(0); running = false; stopRec(); azShutdown();
+  $('final').textContent = `${score.red} - ${score.blue}`;
+  $('final').innerHTML = `<span style="color:#e63946">${score.red}</span> - <span style="color:#60a5fa">${score.blue}</span>`;
+  $('endStars').textContent = '⭐ ' + stars;
+  $('end').className = 'screen';
+}
+
+// ---------------- controls ----------------
+async function prep() {
+  initAudio(); if (AC.state === 'suspended') AC.resume();
+  try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); } catch (e) { if (SR) micOK = false; }
+  if (await azInit()) await azBoot(); else { initRec(); startRec(); }
+  ['start', 'end', 'pickName', 'chalEnd', 'winner'].forEach(id => $(id).className = 'screen hidden');
+}
+async function begin() { await prep(); runMatch(); }
+async function beginChal() { await prep(); runChallenge(); }
+function showNames() {
+  ['start', 'end', 'chalEnd', 'winner'].forEach(id => $(id).className = 'screen hidden');
+  const box = $('nameBtns'); box.innerHTML = '';
+  NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.className = n === chalName ? 'sel' : ''; b.onclick = () => { chalName = n; [...box.children].forEach(c => c.className = c === b ? 'sel' : ''); }; box.appendChild(b); });
+  $('pickName').className = 'screen';
+}
+$('lv1').onclick = () => { azShutdown(); DARJ = false; $('lv1').className = 'sel'; $('lv2').className = ''; };
+$('lv2').onclick = () => { azShutdown(); DARJ = true; $('lv2').className = 'sel'; $('lv1').className = ''; };
+$('go').onclick = begin;
+$('again').onclick = begin;
+$('goChal').onclick = showNames;
+$('goChal2').onclick = beginChal;
+$('chalAgain').onclick = showNames;
+const BOARD = [];   // every challenge played this session
+function ranked() { return [...BOARD].sort((a, b) => b.total - a.total || b.goals - a.goals || a.wrong - b.wrong); }
+function renderBoard(el, meIdx) {
+  const r = ranked(); const me = BOARD[meIdx];
+  el.innerHTML = '<tr><th>#</th><th>الاسْمُ</th><th>⚽</th><th>✔</th><th>🌟</th><th>✘</th><th>النَّتيجَةُ</th></tr>' +
+    r.map((x, i) => `<tr class="${i === 0 ? 'first' : ''} ${x === me ? 'me' : ''}"><td>${i + 1}</td><td class="n">${x.name}</td><td>${x.goals}</td><td>${x.lines}</td><td>${x.darj}</td><td>${x.wrong}</td><td class="s">${x.total}</td></tr>`).join('');
+}
+function announceWinner() {
+  if (!BOARD.length) return;
+  const r = ranked();
+  $('chalEnd').className = 'screen hidden'; $('winner').className = 'screen';
+  $('winName').textContent = r[0].name + ' 🎉';
+  const order = [r[1], r[0], r[2]].filter(Boolean), cls = { 0: 'p1', 1: 'p2', 2: 'p3' }, medal = ['🥇', '🥈', '🥉'];
+  $('podium').innerHTML = order.map(x => { const i = r.indexOf(x); return `<div class="step ${cls[i]}"><div class="nm">${x.name}</div><div class="medal">${medal[i]}</div><div class="sc">${x.total}</div></div>`; }).join('');
+  renderBoard($('board2'), BOARD.indexOf(r[0]));
+  initAudio(); S.horn(); S.cheer(4, .6); setTimeout(() => S.whistle(3), 1200);
+  confetti(W * .5, H * .35, '#ffd166'); setTimeout(() => confetti(W * .3, H * .3, '#e63946'), 500); setTimeout(() => confetti(W * .7, H * .3, '#1d6fd8'), 1000);
+  if ('speechSynthesis' in window) { const v = speechSynthesis.getVoices().find(v => /^ar/i.test(v.lang)); if (v) { const u = new SpeechSynthesisUtterance('الفائز هو ' + r[0].name + '. مبروك!'); u.voice = v; u.lang = v.lang; speechSynthesis.cancel(); setTimeout(() => speechSynthesis.speak(u), 1500); } }
+}
+$('chalWin').onclick = announceWinner;
+$('winAgain').onclick = () => { $('winner').className = 'screen hidden'; showNames(); };
+$('winReset').onclick = () => { BOARD.length = 0; $('winner').className = 'screen hidden'; $('start').className = 'screen'; };
+$('chalHome').onclick = () => { $('chalEnd').className = 'screen hidden'; $('start').className = 'screen'; };
+function togglePause() {
+  if (!running) return;
+  paused = !paused; $('pauseOv').className = paused ? '' : 'hidden';
+  if (paused) { listen(false); setCrowd(0); } else { if (cur && !cur.done) listen(true); setCrowd(cur ? .015 : .1); }
+}
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === ' ' || k === 'enter') { e.preventDefault(); if (cur && !paused) { logEvent('TEACHER-PASS'); success(); } }
+  else if (k === 'l') downloadLog();
+  else if (k === 'x' || k === 'backspace') { if (cur && !paused) { logEvent('TEACHER-FAIL'); miss('wrong'); } }
+  else if (k === 'h') { if (cur) { showHint(); speakLine(); } }
+  else if (k === 'p') togglePause();
+  else if (k === 's') { muted = !muted; if (master) master.gain.value = muted ? 0 : .9; }
+  else if (k === 'd') $('dbg').classList.toggle('on');
+  else if (k === 'm') { if (SR) { micOK = !micOK; if (!rec) initRec(); listen(micOK && !!cur && !paused); micUI(); } }
+});
+if ('speechSynthesis' in window) speechSynthesis.getVoices();
+
+window.__sr = (t, f) => onSpeech([t], f); // for automated tests
+window.__az = (text, final) => { ENGINE = 'azure'; azText(text, final); };
+window.__cur = () => cur;
+newWorld(); micUI(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
