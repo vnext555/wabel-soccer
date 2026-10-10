@@ -785,6 +785,7 @@ function drawField() {
 function line(x1, y1, x2, y2, c, w) { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
 function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 const PH = 150; // sprite height in px
+const SHIRT = {red_run1:{cx:-.124,ty:.156,by:.525,w:.325},red_run2:{cx:.046,ty:.167,by:.519,w:.323},red_kick:{cx:-.031,ty:.173,by:.582,w:.203},blue_run1:{cx:-.092,ty:.181,by:.556,w:.3},blue_run2:{cx:.07,ty:.175,by:.539,w:.319},blue_kick:{cx:.013,ty:.192,by:.597,w:.207}};
 function drawPlayer(p) {
   ctx.save(); ctx.translate(p.x, p.y);
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0, 3, 26, 9, 0, 0, 7); ctx.fill();
@@ -806,18 +807,18 @@ function drawPlayer(p) {
     const bob = run > .3 && !p.fallen ? Math.abs(Math.sin(p.phase)) * 3 : 0;
     ctx.save(); if (face < 0) ctx.scale(-1, 1);
     ctx.drawImage(img, -w / 2, -h - bob, w, h); ctx.restore();
-    // name + number on the back of the shirt
+    // name + number on the back of the shirt (per-sprite shirt box measured from the images)
     if (!p.fallen && p.kickT <= 0 && !p.gk) {
-      const ink = p.gk ? '#111' : '#fff';
-      ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 3;
-      const cx = face < 0 ? -1 : 1; // body is slightly left of center in the sprites
+      const sb = SHIRT[p.team + '_' + key] || { cx: 0, ty: .17, by: .53, w: .32 };
+      const sx = (face < 0 ? -sb.cx : sb.cx) * w, top = -h + sb.ty * h - bob, sh = (sb.by - sb.ty) * h, sw = sb.w * w;
+      ctx.fillStyle = p.gk ? '#111' : '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 2;
       if (p.name) {
-        let fs = 13; ctx.font = `800 ${fs}px Cairo, sans-serif`;
-        while (ctx.measureText(p.name).width > 40 && fs > 8) { fs -= .5; ctx.font = `800 ${fs}px Cairo, sans-serif`; }
-        ctx.fillText(p.name, cx, -h * .74 - bob);
-        ctx.font = '800 20px Cairo, sans-serif'; ctx.fillText(p.num, cx, -h * .60 - bob);
-      } else { ctx.font = '800 22px Cairo, sans-serif'; ctx.fillText(p.num, cx, -h * .64 - bob); }
+        let fs = 11; ctx.font = `800 ${fs}px Cairo, sans-serif`;
+        while (ctx.measureText(p.name).width > sw * 1.15 && fs > 7) { fs -= .5; ctx.font = `800 ${fs}px Cairo, sans-serif`; }
+        ctx.fillText(p.name, sx, top + sh * .22);
+        ctx.font = `800 ${Math.round(sh * .34)}px Cairo, sans-serif`; ctx.fillText(p.num, sx, top + sh * .62);
+      } else { ctx.font = `800 ${Math.round(sh * .4)}px Cairo, sans-serif`; ctx.fillText(p.num, sx, top + sh * .5); }
     }
   } else { // fallback stick figure
     ctx.fillStyle = p.gk ? COL[p.team + 'GK'] : COL[p.team]; ctx.fillRect(-16, -100, 32, 60);
