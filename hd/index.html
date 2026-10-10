@@ -708,23 +708,23 @@ function update(dt) {
       const gx = GOAL[setpiece], dd = DIR[setpiece];
       if (p.team === setpiece) { tx = gx - dd * (130 + p.idx * 38); ty = 330 + p.idx * 55; }
       else { tx = gx - dd * (70 + p.idx * 30); ty = 360 + p.idx * 45; }
-      ty += Math.sin(T + p.seed) * 12;
+      ty += Math.sin(T + p.seed) * 6;
     } else {
       const att = holder && holder.team === p.team;
       tx = p.hx + (ball.x - 800) * .6 + (att ? d * 90 : -d * 20);
-      ty = p.hy + (ball.y - 450) * .25 + Math.sin(T * .8 + p.seed) * 20;
+      ty = p.hy + (ball.y - 450) * .25 + Math.sin(T * .8 + p.seed) * 8;
       if (p === presser) { tx = ball.x - d * 55; ty = ball.y + 8; sp = 210; }
     }
     tx = clamp(tx, 70, 1530); ty = clamp(ty, 70, 830);
     const dx = tx - p.x, dy = ty - p.y, dist = Math.hypot(dx, dy);
-    if (dist > 1) { const m = Math.min(dist, sp * dt); p.x += dx / dist * m; p.y += dy / dist * m; }
+    if (dist > 14) { const m = Math.min(dist - 10, sp * Math.min(1, dist / 60) * dt); p.x += dx / dist * m; p.y += dy / dist * m; }
   });
   players.forEach(p => {
     const v = Math.hypot(p.x - p.lx, p.y - p.ly) / Math.max(dt, 1e-3);
-    const vx = p.x - p.lx; if (Math.abs(vx) > 0.6 * dt * 60) p.face = vx > 0 ? 1 : -1;
+    const vx = (p.x - p.lx) / Math.max(dt, 1e-3); p.vxs = (p.vxs || 0) * .85 + vx * .15; if (Math.abs(p.vxs) > 45) p.face = p.vxs > 0 ? 1 : -1;
     if (p.kickT > 0) p.kickT -= dt;
     p.spd = p.spd * .8 + v * .2; p.lx = p.x; p.ly = p.y;
-    if (p.spd > 8) p.phase += dt * (5 + p.spd / 25);
+    if (p.spd > 40) p.phase += dt * (5 + p.spd / 25);
   });
   if (!ball.free && holder) { ball.x = holder.x + DIR[holder.team] * 16; ball.y = holder.y + 6; ball.z = 0; }
   for (const k in netShake) netShake[k] = Math.max(0, netShake[k] - dt * 1.2);
@@ -793,12 +793,12 @@ function drawPlayer(p) {
   if (p.fallen) ctx.rotate(p.team === 'red' ? -1.35 : 1.35);
   const run = clamp(p.spd / 140, 0, 1);
   let key = p.gk ? 'gk' : (p.kickT > 0 ? 'kick' : (Math.floor(p.phase / Math.PI) % 2 ? 'run2' : 'run1'));
-  if (!p.gk && !(p.kickT > 0) && run < .08) key = 'run1';
+  if (!p.gk && !(p.kickT > 0) && run < .3) key = 'run1';
   const img = IMG[p.team + '_' + key];
   const face = p.kickT > 0 ? DIR[p.team] : p.face;
   if (ok(img)) {
     const h = PH, w = img.naturalWidth / img.naturalHeight * h;
-    const bob = run > .1 && !p.fallen ? Math.abs(Math.sin(p.phase)) * 3 : 0;
+    const bob = run > .3 && !p.fallen ? Math.abs(Math.sin(p.phase)) * 3 : 0;
     ctx.save(); if (face < 0) ctx.scale(-1, 1);
     ctx.drawImage(img, -w / 2, -h - bob, w, h); ctx.restore();
     // name + number on the back of the shirt
