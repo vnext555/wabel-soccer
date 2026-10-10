@@ -738,7 +738,7 @@ function confetti(x, y, color) {
 // ---------------- drawing ----------------
 // ---- HD assets ----
 const IMG = {};
-['red_run1','red_run2','red_kick','red_gk','blue_run1','blue_run2','blue_kick','blue_gk'].forEach(n => { const i = new Image(); i.src = 'assets/' + n + '.png?v=2'; IMG[n] = i; });
+['red_run1','red_run2','red_kick','red_gk','blue_run1','blue_run2','blue_kick','blue_gk'].forEach(n => { const i = new Image(); i.src = 'assets/' + n + '.png?v=3'; IMG[n] = i; });
 const PITCH = new Image(); PITCH.src = 'assets/pitch.jpg?v=1';
 const ok = i => i && i.complete && i.naturalWidth > 0;
 // grass rectangle inside pitch.jpg (image px) -> game pitch 40..1560 x 40..860
@@ -795,14 +795,14 @@ function drawPlayer(p) {
   let key = p.gk ? 'gk' : (p.kickT > 0 ? 'kick' : (Math.floor(p.phase / Math.PI) % 2 ? 'run2' : 'run1'));
   if (!p.gk && !(p.kickT > 0) && run < .3) key = 'run1';
   const img = IMG[p.team + '_' + key];
-  const face = p.kickT > 0 ? DIR[p.team] : p.face;
+  const face = (p.gk || p.kickT > 0) ? DIR[p.team] : p.face;
   if (ok(img)) {
     const h = PH, w = img.naturalWidth / img.naturalHeight * h;
     const bob = run > .3 && !p.fallen ? Math.abs(Math.sin(p.phase)) * 3 : 0;
     ctx.save(); if (face < 0) ctx.scale(-1, 1);
     ctx.drawImage(img, -w / 2, -h - bob, w, h); ctx.restore();
     // name + number on the back of the shirt
-    if (!p.fallen && p.kickT <= 0) {
+    if (!p.fallen && p.kickT <= 0 && !p.gk) {
       const ink = p.gk ? '#111' : '#fff';
       ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 3;
