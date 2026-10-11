@@ -214,16 +214,23 @@ function ask() {
   setStatus('prep', '👀 اقرأها في سِرِّك… استعدّ');
   const me = cur; setTimeout(() => { if (cur !== me || me.done || timeUp) return; S.tick(); listen(true); setStatus('listen', '🎤 اقرأها كاملةً درجًا… والسيّارة تنطلق!'); }, 1800);
 }
-function azText(text, final) {
+function azText(text, final) { // Azure: align everything heard since the sentence appeared (a breath may split a result in two)
   if (!cur || cur.done || !accepting) return; text = (text || '').trim(); if (!text) return;
   $('heard').textContent = 'سَمِعتُ: «' + text + '»';
-  const before = cur.pos; cur.pos = align(tokens(norm(text)), cur.units); if (cur.pos > before && !cur.t0) cur.t0 = performance.now();
-  renderLine();
-  if (cur.pos >= cur.units.length) return success(true);
-  if (!final) { if (cur.pos > before) { S.tick(); rev = Math.min(1, cur.pos / cur.units.length); } return; }
-  const got = cur.pos, nTok = tokens(norm(text)).length;
-  cur.pos = 0; rev = 0;
-  if (/[a-z]{2,}/i.test(text)) miss('en'); else if (got > 0 && nTok <= got) miss('stop'); else { cur.badAt = got; miss('word'); }
+  const before = cur.pos, budget = 2 + 0.9 * cur.units.length;
+  cur.pos = Math.max(before, align(tokens(norm([...cur.finals, text].join(' '))), cur.units)); if (cur.pos > before && !cur.t0) cur.t0 = performance.now();
+  renderLine(); rev = Math.min(1, cur.pos / cur.units.length);
+  if (cur.pos >= cur.units.length) {
+    const secs = (performance.now() - cur.t0) / 1000, whole = align(tokens(norm(text)), cur.units) >= cur.units.length;
+    return success(secs <= budget || (whole && secs <= budget * 1.5));
+  }
+  if (cur.pos > before) { S.tick(); setStatus('listen', 'أكمِل من: <b>' + cur.units[cur.pos].disp + '</b>'); }
+  if (!final) return;
+  cur.finals.push(text); if (cur.finals.length > 4) cur.finals.shift();
+  if (cur.pos === before) { // this result added nothing: a wrong word, or English
+    const bad = cur.pos; cur.pos = 0; cur.finals = []; cur.t0 = 0; rev = 0;
+    if (/[a-z]{2,}/i.test(text)) miss('en'); else { cur.badAt = bad; miss('word'); }
+  }
 }
 function onSpeech(alts, final) { // Chrome engine: progressive, sentence may arrive in pieces
   if (!cur || cur.done || !accepting || !micOK) return;
@@ -320,6 +327,7 @@ const board = JSON.parse(localStorage.getItem('wabel-race-board') || '[]');
 NAMES.forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { driver = n; $('who').textContent = n; $('s-name').classList.add('hidden'); $('s-car').classList.remove('hidden'); initAudio(); if (ENGINE === 'chrome') azInit(); }; $('names').appendChild(b); });
 CARS.forEach(c => { const b = document.createElement('button'); b.className = 'carbtn'; const cc = document.createElement('img'); cc.src = c.img + '?v=2'; b.appendChild(cc); const l = document.createElement('div'); l.textContent = c.name; b.appendChild(l); b.onclick = () => { car = c; [...$('cars').children].forEach(x => x.classList.remove('sel')); b.classList.add('sel'); $('go').disabled = false; }; $('cars').appendChild(b); });
 $('go').onclick = start;
+window.__cur = () => cur; window.__az = (t, f) => azText(t, f); window.__acc = () => accepting; // test hooks
 $('again').onclick = () => { $('s-result').classList.add('hidden'); $('s-name').classList.remove('hidden'); };
 $('retry').onclick = () => { $('s-result').classList.add('hidden'); start(); };
 let timerI;
