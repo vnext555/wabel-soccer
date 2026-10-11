@@ -302,7 +302,7 @@ function listen(on) {
 // utterance: Azure only splits speech on a real silence (GAP ms), so a reader who stops mid-sentence starts over.
 const TOKEN_URL = params.get('token') || 'https://wabel-token-14522.azurewebsites.net/api/token';
 const AZ_LANG = params.get('alang') || 'ar-SA';
-const GAP = +params.get('gap') || 1000;
+const GAP = +params.get('gap') || 1200;
 const VERBS = ['يراوغ', 'يركض', 'يمرر', 'يسدد', 'يركل', 'يعترض', 'ينتزع', 'يعرقل', 'يلوح', 'يهاجم', 'يمسك', 'تصدى', 'تصديا', 'بارعا', 'بقوة', 'الكرة', 'ركنية', 'الحارس', 'صفراء', 'هدف'];
 let ENGINE = 'chrome', azTok = null, azTokAt = 0, azRec = null, azFor = null;
 async function azToken(force) {
@@ -350,28 +350,10 @@ function azShutdown() {
   micUI();
 }
 function azText(text, final) {
-  if (!cur || cur.done || !accepting || speaking) return;
-  text = (text || '').trim(); if (!text) return;
-  $('heard').textContent = 'سَمِعْتُ: «' + text + '»';
-  // دَرْج: judge this utterance alone; level 1: everything said since the sentence appeared
-  const said = DARJ ? text : [...cur.finals, text].join(' ');
-  const before = cur.pos;
-  cur.pos = align(tokens(norm(said)), cur.units);
-  renderLine();
-  dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
-  if (final || cur.pos >= cur.units.length) logEvent(cur.pos >= cur.units.length ? 'PASS' : 'heard', '«' + text + '» matched ' + cur.pos + '/' + cur.units.length);
-  if (cur.pos >= cur.units.length) { cur.fluentAz = DARJ || cur.finals.length === 0; return success(); }
-  if (!final) { if (cur.pos > before) { S.tick(); setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>'); } return; }
-  cur.finals.push(text);
-  if (DARJ) {
-    const got = cur.pos, wrongAt = cur.units[got] ? cur.units[got].disp : '';
-    const nTok = tokens(norm(text)).length;
-    cur.pos = 0; cur.finals = []; renderLine();
-    if (/[a-z]{2,}/i.test(text)) miss('en');
-    else if (got > 0 && nTok <= got) miss('stop');             // ended early: a pause in the middle
-    else { cur.badWord = wrongAt; miss('word'); }               // read on, but a word was wrong
-  } else if (cur.pos === before) miss(/[a-z]{2,}/i.test(text) ? 'en' : 'wrong');
-  else listenStatus();
+  // Same progressive logic as the Chrome engine: everything heard since the sentence appeared is aligned,
+  // so a sentence that Azure splits into two results (a breath mid-sentence) still counts. دَرْج is judged by
+  // time (the flow bar), not by "one utterance".
+  onSpeech([text], final);
 }
 function missWords() {
   if (cur.unitState) return cur.units.filter((u, i) => cur.unitState[i] !== 'ok').map(u => u.disp);
@@ -555,7 +537,7 @@ function ask(spec) {
       const raw = w.replace(/[\u064B-\u0652!،؟.:]/g, ''); if (raw) cur.ref.push({ u: i, raw, w: norm(raw) });
     }));
     renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
-    $('card').className = cardPos(); $('flow').className = DARJ && ENGINE !== 'azure' ? 'on' : ''; $('flow').firstElementChild.style.transform = 'scaleX(1)';
+    $('card').className = cardPos(); $('flow').className = DARJ ? 'on' : ''; $('flow').firstElementChild.style.transform = 'scaleX(1)';
     setCrowd(.015);
     if (DARJ) { // silent preview first, then go
       setStatus('prep', '👀 اقْرَأْها في سِرِّكَ… اسْتَعِدَّ');
@@ -570,7 +552,7 @@ function success() {
   cur.done = true; listen(false);
   cur.unitState = null; cur.pos = cur.units.length; renderLine();
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
-  const fluent = ENGINE === 'azure' ? !!cur.fluentAz : (secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5));
+  const fluent = secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5);
   S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
   stat.lines++; if (cur.wrong === 0) stat.first++; if (fluent) stat.darj++;
   bubble(fluent ? 'دَرْجٌ مُمْتازٌ! ⭐⭐' : pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
