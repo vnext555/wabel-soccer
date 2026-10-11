@@ -302,9 +302,19 @@ function listen(on) {
 // utterance: Azure only splits speech on a real silence (GAP ms), so a reader who stops mid-sentence starts over.
 const TOKEN_URL = params.get('token') || 'https://wabel-token-14522.azurewebsites.net/api/token';
 const AZ_LANG = params.get('alang') || 'ar-SA';
-const GAP = +params.get('gap') || 1200;
+const GAP = +params.get('gap') || 1000;
 const VERBS = ['يراوغ', 'يركض', 'يمرر', 'يسدد', 'يركل', 'يعترض', 'ينتزع', 'يعرقل', 'يلوح', 'يهاجم', 'يمسك', 'تصدى', 'تصديا', 'بارعا', 'بقوة', 'الكرة', 'ركنية', 'الحارس', 'صفراء', 'هدف'];
-let ENGINE = 'chrome', azTok = null, azTokAt = 0, azRec = null, azFor = null;
+let ENGINE = 'chrome', azTok = null, azTokAt = 0, azRec = null, azFor = null, azPL = null;
+// Bias Azure toward what we expect to hear: names, verbs, and the words + full text of the current sentence.
+function azBias() {
+  if (!azPL) return;
+  try {
+    azPL.clear();
+    const ws = new Set([...NAMES, ...VERBS]);
+    if (cur && cur.ref) { cur.ref.forEach(r => ws.add(r.raw)); ws.add(cur.ref.map(r => r.raw).join(' ')); }
+    ws.forEach(w => { if (w) azPL.addPhrase(w); });
+  } catch (e) {}
+}
 async function azToken(force) {
   if (!force && azTok && Date.now() - azTokAt < 8 * 60e3) return azTok;
   const r = await fetch(TOKEN_URL, { cache: 'no-store' });
@@ -330,7 +340,8 @@ async function azBoot() {
   cfg.speechRecognitionLanguage = AZ_LANG;
   cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(DARJ ? GAP : 2500));
   const rec = new sdk.SpeechRecognizer(cfg, sdk.AudioConfig.fromDefaultMicrophoneInput());
-  try { const pl = sdk.PhraseListGrammar.fromRecognizer(rec); [...NAMES, ...VERBS].forEach(w => pl.addPhrase(w)); } catch (e) {}
+  try { azPL = sdk.PhraseListGrammar.fromRecognizer(rec); } catch (e) { azPL = null; }
+  azBias();
   rec.recognizing = (s, e) => azText(e.result.text, false);
   rec.recognized = (s, e) => { if (e.result.reason === sdk.ResultReason.RecognizedSpeech) azText(e.result.text, true); };
   rec.canceled = (s, e) => {
@@ -431,7 +442,7 @@ function flowTick() { // drains the flow bar
   if (!cur || cur.done || !cur.t0) return;
   const k = Math.max(0, 1 - (performance.now() - cur.t0) / 1000 / cur.budget);
   $('flow').firstElementChild.style.transform = 'scaleX(' + k + ')';
-  if (k > 0) requestAnimationFrame(flowTick); else resetSentence();
+  if (k > 0) requestAnimationFrame(flowTick); else if (ENGINE === 'azure') cur.slow = true; else resetSentence();
 }
 function setStatus(cls, html) { const e = $('status'); e.className = cls; e.innerHTML = html; }
 
@@ -536,7 +547,7 @@ function ask(spec) {
     cur.units.forEach((u, i) => (u.num !== undefined ? NUMW[u.num].split(' ') : [u.disp]).forEach(w => {
       const raw = w.replace(/[\u064B-\u0652!،؟.:]/g, ''); if (raw) cur.ref.push({ u: i, raw, w: norm(raw) });
     }));
-    renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
+    azBias(); renderLine(); $('hint').innerHTML = ''; $('heard').textContent = '';
     $('card').className = cardPos(); $('flow').className = DARJ ? 'on' : ''; $('flow').firstElementChild.style.transform = 'scaleX(1)';
     setCrowd(.015);
     if (DARJ) { // silent preview first, then go
@@ -552,7 +563,8 @@ function success() {
   cur.done = true; listen(false);
   cur.unitState = null; cur.pos = cur.units.length; renderLine();
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
-  const fluent = secs <= cur.budget || (cur.fluentFinal && secs <= cur.budget * 1.5);
+  const lat = ENGINE === 'azure' ? 1.5 : 0;
+  const fluent = secs <= cur.budget + lat || (cur.fluentFinal && secs <= cur.budget * 1.5 + lat);
   S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
   stat.lines++; if (cur.wrong === 0) stat.first++; if (fluent) stat.darj++;
   bubble(fluent ? 'دَرْجٌ مُمْتازٌ! ⭐⭐' : pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
@@ -599,6 +611,7 @@ function onSpeech(alts, final) {
   const newHit = cur.pos > before;
   if (newHit && !cur.t0) { cur.t0 = performance.now(); if (DARJ) flowTick(); }
   dbg(final ? 'f' : 'i', (final ? '● ' : '○ ') + text + '  [' + cur.pos + '/' + cur.units.length + ']');
+  if (final || cur.pos >= cur.units.length) logEvent(cur.pos >= cur.units.length ? 'PASS' : (final ? 'heard' : 'partial'), '«' + text + '» matched ' + cur.pos + '/' + cur.units.length + (final ? '' : ' (interim)'));
   renderLine();
   if (cur.pos >= cur.units.length) return success();
   if (newHit) {
