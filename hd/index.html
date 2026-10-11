@@ -387,7 +387,8 @@ function numMatch(nt, tk, n) {
   if (n <= 9) return has(U[n]) && !ten;
   if (n === 10) return tk.some(t => /^(ال)?عشر(ه)?$/.test(t));
   if (n === 20) return tk.some(t => /^(ال)?عشر(ين|ون)/.test(t));
-  const st = n === 11 ? ['احد', 'حدا', 'احدا', 'حداش', 'حدعش'] : U[n - 10];
+  const TEEN_X = { 3: ['تلاته', 'ثلاثه'], 4: ['بعد', 'ربع', 'اربعه', 'ربعه'], 5: ['خمسه', 'حمسه'], 6: ['سته', 'ستت'], 7: ['سبعه'], 8: ['تمانيه', 'ثمانيه'], 9: ['تسعه'] };
+  const st = n === 11 ? ['احد', 'حدا', 'احدا', 'حداش', 'حدعش'] : [...U[n - 10], ...(TEEN_X[n - 10] || [])];
   return (has(st) && ten) || tk.some(t => st.some(s => t.includes(s)) && /(تاش|طاش|تعش|طعش)/.test(t));
 }
 function groupMatch(text, g) {
@@ -463,7 +464,10 @@ function wmatch(tok, key) {
   const loose = w => { while (w.length > 3 && /[اهيوى]$/.test(w)) w = w.slice(0, -1); return w; };
   if (a.length >= 3 && b.length >= 3 && loose(a) === loose(b)) return true;
   const L = Math.max(a.length, b.length);
-  return L >= 4 && 1 - lev(a, b) / L >= (L >= 6 ? 0.6 : 0.67);
+  if (L >= 4 && 1 - lev(a, b) / L >= (L >= 6 ? 0.6 : 0.67)) return true;
+  const dp = w => w.replace(/^[بلك](?=ال)/, '').replace(/^[بلك](?=.{4,})/, ''); // Azure often drops a بِـ/لِـ/كَـ prefix
+  const a2 = stripPre(dp(tok)), b2 = stripPre(dp(key));
+  return (dp(tok) !== tok || dp(key) !== key) && a2.length >= 3 && a2 === b2;
 }
 // compile a prompt into word units (a number is one unit that may take several spoken words, or a digit)
 function compile(spec) {
@@ -562,7 +566,7 @@ function success() {
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
   const lat = ENGINE === 'azure' ? 1.5 : 0;
   const fluent = secs <= cur.budget + lat || (cur.fluentFinal && secs <= cur.budget * 1.5 + lat);
-  if (DARJ && !fluent && cur.resets < 2) { logEvent('NOT-DARJ', secs.toFixed(1) + 's, progress chunks ' + (cur.prog || 0)); return resetSentence(); }
+  if (DARJ && !fluent) logEvent('NOT-DARJ (no bonus)', secs.toFixed(1) + 's, progress chunks ' + (cur.prog || 0));
   cur.done = true; listen(false);
   cur.unitState = null; cur.pos = cur.units.length; renderLine();
   S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
@@ -592,7 +596,7 @@ function logEvent(kind, detail) {
   if (LOG.length > 500) LOG.shift();
 }
 function downloadLog() {
-  const blob = new Blob(['engine: ' + ENGINE + ' | level: ' + (DARJ ? 'darj' : '1') + ' | ' + navigator.userAgent + '\n\n' + LOG.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const blob = new Blob(['build: v15 (2026-10-11) | engine: ' + ENGINE + ' | level: ' + (DARJ ? 'darj' : '1') + ' | ' + navigator.userAgent + '\n\n' + LOG.join('\n')], { type: 'text/plain;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'wabel-soccer-log.txt'; a.click();
 }
 const dbgLines = [];
