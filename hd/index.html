@@ -382,7 +382,7 @@ const U = { 1: ['واحد', 'احد'], 2: ['اثن', 'اتن', 'ثنين', 'تن
 function numMatch(nt, tk, n) {
   if (new RegExp('(^|\\D)' + n + '(\\D|$)').test(nt)) return true;
   const strip = t => t.replace(/^(وال|ال|و|ب)/, '');
-  const has = st => tk.some(t => st.some(s => strip(t).startsWith(s) || t.startsWith(s)));
+  const has = st => tk.some(t => st.some(s => strip(t).startsWith(s) || t.startsWith(s) || (s.length >= 4 && lev(strip(t), s) <= 1)));
   const ten = tk.some(t => /^(ال|و)?عشر/.test(t));
   if (n <= 9) return has(U[n]) && !ten;
   if (n === 10) return tk.some(t => /^(ال)?عشر(ه)?$/.test(t));
@@ -459,12 +459,11 @@ function wmatch(tok, key) {
   if (tok === key) return true;
   const a = stripPre(tok), b = stripPre(key);
   if (a === b) return true;
-  if (ENGINE !== 'azure' && a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
+  if (a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
   const loose = w => { while (w.length > 3 && /[اهيوى]$/.test(w)) w = w.slice(0, -1); return w; };
   if (a.length >= 3 && b.length >= 3 && loose(a) === loose(b)) return true;
-  if (ENGINE === 'azure') return false;
   const L = Math.max(a.length, b.length);
-  return L >= 3 && 1 - lev(a, b) / L >= 0.67;
+  return L >= 4 && 1 - lev(a, b) / L >= 0.67;
 }
 // compile a prompt into word units (a number is one unit that may take several spoken words, or a digit)
 function compile(spec) {
@@ -485,11 +484,11 @@ function unitMatch(tok, u, sub) { // returns {ok, sub} — sub = progress inside
   return { ok: wmatch(tok, u.key), sub: 0 };
 }
 // synonyms / common mishearings for hard words (normalized)
-const ALT = { 'ماهر': ['ماهر', 'ماهير', 'مهر', 'ماهره', 'مهير', 'ماهرا', 'ماهيرا', 'ماهور'], 'ادم': ['ادم', 'ادام', 'اديم', 'ادمي'], 'برا': ['برا', 'براء', 'بره', 'برى', 'براا', 'بارا', 'براه'], 'عمر': ['عمر', 'عمار', 'عمرو', 'عومر', 'عمير'], 'وليد': ['وليد', 'ولييد', 'وليدي', 'وليدو'], 'خالد': ['خالد', 'خاليد', 'خالدي', 'خاليد'], 'خطا': ['خطا', 'خطو', 'خطي'], 'وبطاقه': ['وبطاقه', 'بطاقه'], 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
+const ALT = { 'ماهر': ['ماهر', 'ماهير', 'مهر', 'ماهره', 'مهير', 'ماهرا', 'ماهيرا', 'ماهور'], 'ادم': ['ادم', 'ادام', 'اديم', 'ادمي'], 'برا': ['برا', 'براء', 'بره', 'برى', 'براا', 'بارا', 'براه'], 'عمر': ['عمر', 'عمار', 'عمرو', 'عومر', 'عمير'], 'وليد': ['وليد', 'ولييد', 'وليدي', 'وليدو'], 'خالد': ['خالد', 'خاليد', 'خالدي', 'خاليد'], 'خطا': ['خطا', 'خطو', 'خطي'], 'وبطاقه': ['وبطاقه', 'بطاقه'], 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ', 'يراوك', 'يراوخ'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر', 'يمدر', 'يمر', 'يمرد'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
 function umatch(tok, u) { return wmatch(tok, u.key) || (ALT[u.key] || []).some(k => wmatch(tok, k)); }
 function unitOk(tok, u, sub) { if (u.num !== undefined) return unitMatch(tok, u, sub); return { ok: umatch(tok, u), sub: 0 }; }
-function align(toks, units) {
-  let pos = 0, sub = 0;
+function align(toks, units, start = 0) {
+  let pos = start, sub = 0;
   for (let ti = 0; ti < toks.length; ti++) {
     const tok = toks[ti];
     if (pos >= units.length) break;
@@ -501,12 +500,12 @@ function align(toks, units) {
 }
 function resetSentence() { // level 2: the flow bar ran out — read it again from the start
   if (!cur || cur.done) return;
-  cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; cur.fluentFinal = false; renderLine();
+  cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; cur.fluentFinal = false; cur.lastHit = 0; cur.graceUntil = performance.now() + 1500; renderLine();
   $('flow').firstElementChild.style.transform = 'scaleX(1)';
   S.buzz(); if (cur.resets >= 2) { cur.wrong++; stat.wrong++; }
   const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
   bubble('تَوَقَّفْتَ!', 'bad');
-  setStatus('reset', '⏱ انْتَهى الوَقْتُ! اقْرَأْها دَرْجاً مِنَ البِدايَةِ بِلا تَوَقُّفٍ');
+  setStatus('reset', '⏸ تَوَقَّفْتَ! اقْرَأْها دَرْجاً مِنَ البِدايَةِ بِلا تَوَقُّفٍ' + (cur.resets >= 2 ? ' (المَرَّةُ الأَخيرَةُ تُقبَلُ)' : ''));
   showHint();
   clearTimeout(cur.stT); cur.stT = setTimeout(listenStatus, 2500);
 }
@@ -560,11 +559,12 @@ function ask(spec) {
 function cardPos() { return focusP && focusP.y > 540 ? 'top' : ''; }
 function success() {
   if (!cur || cur.done) return;
-  cur.done = true; listen(false);
-  cur.unitState = null; cur.pos = cur.units.length; renderLine();
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
   const lat = ENGINE === 'azure' ? 1.5 : 0;
   const fluent = secs <= cur.budget + lat || (cur.fluentFinal && secs <= cur.budget * 1.5 + lat);
+  if (DARJ && !fluent && cur.resets < 2) { logEvent('NOT-DARJ', secs.toFixed(1) + 's, chunks ' + cur.finals.length); return resetSentence(); }
+  cur.done = true; listen(false);
+  cur.unitState = null; cur.pos = cur.units.length; renderLine();
   S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
   stat.lines++; if (cur.wrong === 0) stat.first++; if (fluent) stat.darj++;
   bubble(fluent ? 'دَرْجٌ مُمْتازٌ! ⭐⭐' : pick(PRAISE), 'ok'); $('card').className = 'good ' + cardPos();
@@ -599,13 +599,14 @@ const dbgLines = [];
 function dbg(cls, txt) { dbgLines.push(`<span class="${cls}">${txt}</span>`); if (dbgLines.length > 14) dbgLines.shift(); $('dbg').innerHTML = dbgLines.join('<br>'); console.log('[SR]', txt); }
 function onSpeech(alts, final) {
   if (!cur || cur.done || paused || !accepting || speaking || !micOK) return;
+  if (cur.graceUntil && performance.now() < cur.graceUntil) return; // just restarted: let the reader take a breath
   const text = (alts[0] || '').trim();
   const latin = /[a-z]{2,}/i.test(text);
   if (text) $('heard').textContent = latin ? '' : 'سَمِعْتُ: «' + text + '»';
   // everything heard since this prompt started, so a sentence read in pieces still counts
   const before = cur.pos;
   let best = before;
-  for (const a of [[...cur.finals, text].join(' '), ...alts]) best = Math.max(best, align(tokens(norm(a)), cur.units));
+  for (const a of [[...cur.finals, text].join(' '), ...alts]) best = Math.max(best, align(tokens(norm(a)), cur.units), align(tokens(norm(a)), cur.units, before));
   cur.pos = best;
   if (final && align(tokens(norm(text)), cur.units) >= cur.units.length) cur.fluentFinal = true;
   const newHit = cur.pos > before;
@@ -619,7 +620,8 @@ function onSpeech(alts, final) {
     setStatus('part', '✔ أَكْمِلْ مِنْ: <span class="miss">' + nextWord() + '</span>');
   }
   if (final && text) {
-    cur.finals.push(text); if (cur.finals.length > 4) cur.finals.shift();
+    cur.finals.push(text); if (cur.finals.length > 12) cur.finals.shift();
+    if (DARJ && cur.finals.length >= 3 && cur.pos > 0 && cur.resets < 2) { logEvent('STOPPED', 'chunk ' + cur.finals.length); return resetSentence(); }
     const advanced = cur.pos > cur.lastPos; cur.lastPos = cur.pos;
     const recentHit = performance.now() - cur.lastHit < 2500;
     if (!advanced && !recentHit) miss(latin ? 'en' : 'wrong');
