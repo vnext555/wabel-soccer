@@ -193,7 +193,7 @@ function wmatch(tok, key) {
   if (a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a))) return true;
   const loose = w => { while (w.length > 3 && /[اهيوى]$/.test(w)) w = w.slice(0, -1); return w; };
   if (a.length >= 3 && b.length >= 3 && loose(a) === loose(b)) return true;
-  const L = Math.max(a.length, b.length); return L >= 4 && 1 - lev(a, b) / L >= 0.67;
+  const L = Math.max(a.length, b.length); return L >= 4 && 1 - lev(a, b) / L >= (L >= 6 ? 0.6 : 0.67);
 }
 function compile(text) { return text.split(/\s+/).map(w => ({ disp: w, key: norm(w.replace(/[!،؟.:]/g, '')) })).filter(u => u.key); }
 function align(toks, units, start = 0) { let pos = start; for (const tok of toks) { if (pos >= units.length) break; if (wmatch(tok, units[pos].key)) pos++; } return pos; }
@@ -233,14 +233,15 @@ function azText(text, final) { // Azure: align everything heard since the senten
   renderLine(); rev = Math.min(1, cur.pos / cur.units.length);
   if (cur.pos >= cur.units.length) {
     const secs = (performance.now() - cur.t0) / 1000, whole = align(tokens(norm(text)), cur.units) >= cur.units.length;
-    const fluent = (secs <= budget + 1.5 || (whole && secs <= budget * 1.5 + 1.5)) && cur.finals.length <= 1;
+    const fluent = (secs <= budget + 1.5 || (whole && secs <= budget * 1.5 + 1.5)) && (cur.prog || 0) <= 1;
     if (!fluent && (cur.resets || 0) < 2) return stopped(secs);
     return success(fluent);
   }
   if (cur.pos > before) { S.tick(); setStatus('listen', 'أكمِل من: <b>' + cur.units[cur.pos].disp + '</b>'); }
   if (!final) return;
   cur.finals.push(text); if (cur.finals.length > 12) cur.finals.shift();
-  if (cur.finals.length >= 3 && cur.pos > 0 && (cur.resets || 0) < 2) return stopped(0);
+  if (cur.pos > before) cur.prog = (cur.prog || 0) + 1;
+  if ((cur.prog || 0) >= 3 && (cur.resets || 0) < 2) return stopped(0);
   if (cur.pos === before) { // this result added nothing: a wrong word, or English
     const bad = cur.pos; cur.pos = 0; cur.finals = []; cur.t0 = 0; rev = 0;
     if (/[a-z]{2,}/i.test(text)) miss('en'); else { cur.badAt = bad; miss('word'); }
@@ -259,7 +260,7 @@ function onSpeech(alts, final) { // Chrome engine: progressive, sentence may arr
   if (final) { if (cur.pos === before) miss(/[a-z]{2,}/i.test(text) ? 'en' : 'word'); cur.finals.push(text); }
 }
 function stopped(secs) { // not read in one flow: start the sentence over (after two resets the next read is accepted without nitro)
-  if (!cur || cur.done) return; cur.resets = (cur.resets || 0) + 1; cur.pos = 0; cur.finals = []; cur.t0 = 0; rev = 0; cur.badAt = -1; cur.graceUntil = performance.now() + 1500; renderLine();
+  if (!cur || cur.done) return; cur.resets = (cur.resets || 0) + 1; cur.pos = 0; cur.finals = []; cur.prog = 0; cur.t0 = 0; rev = 0; cur.badAt = -1; cur.graceUntil = performance.now() + 1500; renderLine();
   S.screech(); braking = 1; const c = $('card'); c.className = ''; void c.offsetWidth; c.className = 'bad';
   banner('توقّفت!', 'bad');
   setStatus('bad', '⏸ توقّفت! اقرأها كاملةً درجًا من البداية بلا توقّف' + (cur.resets >= 2 ? ' (المرّة القادمة تُقبل)' : ''));
