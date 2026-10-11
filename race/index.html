@@ -172,7 +172,8 @@ async function azBoot() {
   const sdk = window.SpeechSDK, cfg = sdk.SpeechConfig.fromAuthorizationToken(t.token, t.region);
   cfg.speechRecognitionLanguage = AZ_LANG; cfg.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(GAP));
   const r = new sdk.SpeechRecognizer(cfg, sdk.AudioConfig.fromDefaultMicrophoneInput());
-  try { const pl = sdk.PhraseListGrammar.fromRecognizer(r); const ws = new Set(); Object.values(BANK).flat().forEach(s => s.replace(/[ً-ْ]/g, '').split(/\s+/).forEach(w => ws.add(w.replace(/[.،!؟]/g, '')))); [...ws, ...NAMES].forEach(w => pl.addPhrase(w)); } catch (e) {}
+  try { azPL = sdk.PhraseListGrammar.fromRecognizer(r); } catch (e) { azPL = null; }
+  azBias();
   r.recognizing = (s, e) => azText(e.result.text, false);
   r.recognized = (s, e) => { if (e.result.reason === sdk.ResultReason.RecognizedSpeech) azText(e.result.text, true); };
   r.canceled = (s, e) => { if (e.errorDetails && /auth|401|403|token/i.test(e.errorDetails)) azTok = null; if (azRec === r) { azRec = null; recRunning = false; micUI(); try { r.close(); } catch (x) {} if (running) setTimeout(azBoot, 800); } };
@@ -207,9 +208,19 @@ function renderLine() {
   cur.units.forEach((u, i) => { const sp = document.createElement('span'); sp.textContent = u.disp; sp.className = 'kw' + (i < cur.pos ? ' ok' : i === cur.pos ? ' next' : '') + (cur.badAt === i ? ' miss' : ''); el.appendChild(sp); el.appendChild(document.createTextNode(' ')); });
 }
 function banner(txt, cls) { const b = $('banner'); b.textContent = txt; b.className = 'show ' + (cls || ''); clearTimeout(banner.t); banner.t = setTimeout(() => b.className = '', 1500); }
+let azPL = null;
+function azBias() { // bias Azure toward the current sentence (its words + the whole line) and the names
+  if (!azPL) return;
+  try {
+    azPL.clear(); const ws = new Set(NAMES);
+    if (cur) { const plain = cur.text.replace(/[ً-ْ]/g, '').replace(/[.،!؟]/g, ''); plain.split(/\s+/).forEach(w => w && ws.add(w)); ws.add(plain); }
+    ws.forEach(w => azPL.addPhrase(w));
+  } catch (e) {}
+}
 function ask() {
   const s = nextSentence(miles);
   cur = { text: s.text, tier: s.tier, units: compile(s.text), pos: 0, finals: [], done: false, t0: 0, badAt: -1, wrong: 0 };
+  azBias();
   renderLine(); $('heard').textContent = ''; $('card').className = '';
   setStatus('prep', '👀 اقرأها في سِرِّك… استعدّ');
   const me = cur; setTimeout(() => { if (cur !== me || me.done || timeUp) return; S.tick(); listen(true); setStatus('listen', '🎤 اقرأها كاملةً درجًا… والسيّارة تنطلق!'); }, 1800);
@@ -222,7 +233,7 @@ function azText(text, final) { // Azure: align everything heard since the senten
   renderLine(); rev = Math.min(1, cur.pos / cur.units.length);
   if (cur.pos >= cur.units.length) {
     const secs = (performance.now() - cur.t0) / 1000, whole = align(tokens(norm(text)), cur.units) >= cur.units.length;
-    return success(secs <= budget || (whole && secs <= budget * 1.5));
+    return success(secs <= budget + 1.5 || (whole && secs <= budget * 1.5 + 1.5));
   }
   if (cur.pos > before) { S.tick(); setStatus('listen', 'أكمِل من: <b>' + cur.units[cur.pos].disp + '</b>'); }
   if (!final) return;
