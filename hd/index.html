@@ -556,7 +556,7 @@ function ask(spec) {
     } else { listen(!paused); listenStatus(); }
   });
 }
-function cardPos() { return focusP && focusP.y > 540 ? 'top' : ''; }
+function cardPos() { return ''; } // reading card always at the bottom (Ammar, 2026-10-11)
 function success() {
   if (!cur || cur.done) return;
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
@@ -602,7 +602,7 @@ function onSpeech(alts, final) {
   if (cur.graceUntil && performance.now() < cur.graceUntil) return; // just restarted: let the reader take a breath
   const text = (alts[0] || '').trim();
   const latin = /[a-z]{2,}/i.test(text);
-  if (text) $('heard').textContent = latin ? '' : 'سَمِعْتُ: «' + text + '»';
+  if (text && final) $('heard').textContent = latin ? '' : 'سَمِعْتُ: «' + text + '»';
   // everything heard since this prompt started, so a sentence read in pieces still counts
   const before = cur.pos;
   let best = before;
