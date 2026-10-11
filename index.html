@@ -463,7 +463,7 @@ function wmatch(tok, key) {
   const loose = w => { while (w.length > 3 && /[اهيوى]$/.test(w)) w = w.slice(0, -1); return w; };
   if (a.length >= 3 && b.length >= 3 && loose(a) === loose(b)) return true;
   const L = Math.max(a.length, b.length);
-  return L >= 4 && 1 - lev(a, b) / L >= 0.67;
+  return L >= 4 && 1 - lev(a, b) / L >= (L >= 6 ? 0.6 : 0.67);
 }
 // compile a prompt into word units (a number is one unit that may take several spoken words, or a digit)
 function compile(spec) {
@@ -484,7 +484,7 @@ function unitMatch(tok, u, sub) { // returns {ok, sub} — sub = progress inside
   return { ok: wmatch(tok, u.key), sub: 0 };
 }
 // synonyms / common mishearings for hard words (normalized)
-const ALT = { 'ماهر': ['ماهر', 'ماهير', 'مهر', 'ماهره', 'مهير', 'ماهرا', 'ماهيرا', 'ماهور'], 'ادم': ['ادم', 'ادام', 'اديم', 'ادمي'], 'برا': ['برا', 'براء', 'بره', 'برى', 'براا', 'بارا', 'براه'], 'عمر': ['عمر', 'عمار', 'عمرو', 'عومر', 'عمير'], 'وليد': ['وليد', 'ولييد', 'وليدي', 'وليدو'], 'خالد': ['خالد', 'خاليد', 'خالدي', 'خاليد'], 'خطا': ['خطا', 'خطو', 'خطي'], 'وبطاقه': ['وبطاقه', 'بطاقه'], 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ', 'يراوك', 'يراوخ'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر', 'يمدر', 'يمر', 'يمرد'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
+const ALT = { 'ماهر': ['ماهر', 'ماهير', 'مهر', 'ماهره', 'مهير', 'ماهرا', 'ماهيرا', 'ماهور'], 'ادم': ['ادم', 'ادام', 'اديم', 'ادمي'], 'برا': ['برا', 'براء', 'بره', 'برى', 'براا', 'بارا', 'براه'], 'عمر': ['عمر', 'عمار', 'عمرو', 'عومر', 'عمير'], 'وليد': ['وليد', 'ولييد', 'وليدي', 'وليدو'], 'خالد': ['خالد', 'خاليد', 'خالدي', 'خاليد'], 'خطا': ['خطا', 'خطو', 'خطي'], 'وبطاقه': ['وبطاقه', 'بطاقه'], 'يركل': ['يركل', 'يرقل', 'ركل', 'يركله', 'يرقله'], 'ينتزع': ['ينتزع', 'انتزع'], 'يعترض': ['يعترض', 'اعترض'], 'يعرقل': ['يعرقل', 'عرقل'], 'يراوغ': ['يراوغ', 'يراوق', 'راوغ', 'يراوك', 'يراوخ', 'يورو', 'يراو'], 'المباراه': ['مباراه', 'مبادره', 'مدراء', 'مباره', 'مبارات', 'مباراة'], 'بدات': ['بدات', 'بدت', 'بدا'], 'يسدد': ['يسدد', 'سدد'], 'يمرر': ['يمرر', 'مرر', 'يمدر', 'يمر', 'يمرد'], 'يركض': ['يركض', 'ركض', 'يركظ'], 'يهاجم': ['يهاجم', 'هاجم'], 'تصديا': ['تصديا', 'تصدي'] };
 function umatch(tok, u) { return wmatch(tok, u.key) || (ALT[u.key] || []).some(k => wmatch(tok, k)); }
 function unitOk(tok, u, sub) { if (u.num !== undefined) return unitMatch(tok, u, sub); return { ok: umatch(tok, u), sub: 0 }; }
 function align(toks, units, start = 0) {
@@ -500,7 +500,7 @@ function align(toks, units, start = 0) {
 }
 function resetSentence() { // level 2: the flow bar ran out — read it again from the start
   if (!cur || cur.done) return;
-  cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; cur.fluentFinal = false; cur.lastHit = 0; cur.graceUntil = performance.now() + 1500; renderLine();
+  cur.resets++; cur.pos = 0; cur.finals = []; cur.t0 = 0; cur.lastPos = 0; cur.prog = 0; cur.fluentFinal = false; cur.lastHit = 0; cur.graceUntil = performance.now() + 1500; renderLine();
   $('flow').firstElementChild.style.transform = 'scaleX(1)';
   S.buzz(); if (cur.resets >= 2) { cur.wrong++; stat.wrong++; }
   const c = $('card'); c.className = cardPos(); void c.offsetWidth; c.className = 'shake ' + cardPos();
@@ -562,7 +562,7 @@ function success() {
   const secs = cur.t0 ? (performance.now() - cur.t0) / 1000 : 99;
   const lat = ENGINE === 'azure' ? 1.5 : 0;
   const fluent = secs <= cur.budget + lat || (cur.fluentFinal && secs <= cur.budget * 1.5 + lat);
-  if (DARJ && !fluent && cur.resets < 2) { logEvent('NOT-DARJ', secs.toFixed(1) + 's, chunks ' + cur.finals.length); return resetSentence(); }
+  if (DARJ && !fluent && cur.resets < 2) { logEvent('NOT-DARJ', secs.toFixed(1) + 's, progress chunks ' + (cur.prog || 0)); return resetSentence(); }
   cur.done = true; listen(false);
   cur.unitState = null; cur.pos = cur.units.length; renderLine();
   S.ding(); S.cheer(1.2, .25); stars += fluent ? 2 : 1; $('stars').textContent = '⭐ ' + stars;
@@ -621,8 +621,9 @@ function onSpeech(alts, final) {
   }
   if (final && text) {
     cur.finals.push(text); if (cur.finals.length > 12) cur.finals.shift();
-    if (DARJ && cur.finals.length >= 3 && cur.pos > 0 && cur.resets < 2) { logEvent('STOPPED', 'chunk ' + cur.finals.length); return resetSentence(); }
     const advanced = cur.pos > cur.lastPos; cur.lastPos = cur.pos;
+    if (advanced) cur.prog = (cur.prog || 0) + 1;
+    if (DARJ && cur.prog >= 3 && cur.resets < 2) { logEvent('STOPPED', 'progress chunks ' + cur.prog); return resetSentence(); }
     const recentHit = performance.now() - cur.lastHit < 2500;
     if (!advanced && !recentHit) miss(latin ? 'en' : 'wrong');
     else if (!newHit) listenStatus();
